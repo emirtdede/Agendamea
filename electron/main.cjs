@@ -131,15 +131,38 @@ function startBackend(port) {
       AGENDAMEA_DATA_DIR: userDataDir,
       AGENDAMEA_APP_ROOT: runtimeRoot,
     },
-    stdio: ['ignore', 'ignore', stderrTarget],
+    stdio: ['ignore', 'ignore', stderrTarget, 'ipc'],
     windowsHide: true,
   });
 }
 
 function stopBackend() {
-  if (serverProcess && !serverProcess.killed) {
-    serverProcess.kill('SIGTERM');
-    serverProcess = null;
+  const proc = serverProcess;
+  serverProcess = null;
+  if (proc && !proc.killed) {
+    try {
+      if (proc.connected) {
+        proc.send('shutdown');
+      } else {
+        proc.kill();
+      }
+    } catch {
+      try {
+        proc.kill();
+      } catch {
+        // Ignore already exited process
+      }
+    }
+    const forceTimer = setTimeout(() => {
+      try {
+        if (proc.exitCode === null && !proc.killed) {
+          proc.kill();
+        }
+      } catch {
+        // Ignore already exited process
+      }
+    }, 1500);
+    forceTimer.unref();
   }
   if (typeof logFd === 'number') {
     try {
@@ -181,6 +204,12 @@ async function createWindow(appUrl) {
     minWidth: 860,
     minHeight: 580,
     frame: false,
+    thickFrame: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    closable: true,
+    autoHideMenuBar: true,
     title: 'Agendamea',
     icon: resolveWindowIcon(runtimeRoot),
     backgroundColor: '#fafafa',
@@ -192,6 +221,9 @@ async function createWindow(appUrl) {
       sandbox: true,
     },
   });
+
+  // Remove default Electron menu so Alt+Arrow shortcuts never trigger a phantom menu bar on Windows 11
+  mainWindow.setMenu(null);
 
   // Allow only whitelisted Vellium links to open in the user's default browser/mail client
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -250,31 +282,39 @@ async function createWindow(appUrl) {
   }
 }
 
-ipcMain.handle('window:minimize', () => {
-  mainWindow?.minimize();
+function resolveSenderWindow(event) {
+  return BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+}
+
+ipcMain.handle('window:minimize', (event) => {
+  const win = resolveSenderWindow(event);
+  win?.minimize();
 });
 
-ipcMain.handle('window:toggle-maximize', () => {
-  if (!mainWindow) return false;
-  if (mainWindow.isFullScreen()) {
-    mainWindow.setFullScreen(false);
+ipcMain.handle('window:toggle-maximize', (event) => {
+  const win = resolveSenderWindow(event);
+  if (!win) return false;
+  if (win.isFullScreen()) {
+    win.setFullScreen(false);
     return false;
   }
-  if (mainWindow.isMaximized()) {
-    mainWindow.unmaximize();
+  if (win.isMaximized()) {
+    win.unmaximize();
     return false;
   }
-  mainWindow.maximize();
+  win.maximize();
   return true;
 });
 
-ipcMain.handle('window:is-maximized', () => {
-  if (!mainWindow) return false;
-  return mainWindow.isMaximized() || mainWindow.isFullScreen();
+ipcMain.handle('window:is-maximized', (event) => {
+  const win = resolveSenderWindow(event);
+  if (!win) return false;
+  return win.isMaximized() || win.isFullScreen();
 });
 
-ipcMain.handle('window:close', () => {
-  mainWindow?.close();
+ipcMain.handle('window:close', (event) => {
+  const win = resolveSenderWindow(event);
+  win?.close();
 });
 
 app

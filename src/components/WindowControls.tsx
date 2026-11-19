@@ -150,7 +150,7 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
         onClick={() => void handleMinimize()}
         aria-label="Arka plana gönder"
         title="Arka plana gönder"
-        className="flex h-7 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] active:bg-[var(--border)]"
+        className="app-no-drag flex h-7 w-8 cursor-pointer items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] active:bg-[var(--border)]"
       >
         <svg
           width="10"
@@ -175,7 +175,7 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
         aria-label={isFullscreenOrMaximized ? 'Tam ekrandan çık' : 'Tam ekran yap'}
         title={isFullscreenOrMaximized ? 'Tam ekrandan çık' : 'Tam ekran yap'}
         aria-pressed={isFullscreenOrMaximized}
-        className="flex h-7 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] active:bg-[var(--border)]"
+        className="app-no-drag flex h-7 w-8 cursor-pointer items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] active:bg-[var(--border)]"
       >
         {isFullscreenOrMaximized ? (
           <svg
@@ -228,7 +228,7 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
         onClick={() => void handleClose()}
         aria-label="Uygulamayı kapat"
         title="Uygulamayı kapat"
-        className="flex h-7 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[#c42b1c] hover:text-white active:bg-[#a62216]"
+        className="app-no-drag flex h-7 w-8 cursor-pointer items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[#c42b1c] hover:text-white active:bg-[#a62216]"
       >
         <svg
           width="10"

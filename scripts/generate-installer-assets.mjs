@@ -123,7 +123,7 @@ async function renderIco(svgString) {
   return encodeIco(frames);
 }
 
-/** 1. Primary App & Setup Icon (Obsidian squircle + crisp Agendamea monogram) */
+/** 1. Primary App Icon (Obsidian squircle + centered crisp Agendamea monogram) */
 const appIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
@@ -138,11 +138,13 @@ const appIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
   </defs>
   <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#ag-bg)" />
   <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="url(#ag-edge)" stroke-width="4" />
-  ${monogramPaths('#ffffff', '#ffffff')}
+  <g transform="translate(-4 3)">
+    ${monogramPaths('#ffffff', '#ffffff')}
+  </g>
 </svg>
 `;
 
-/** 2. Setup Wizard Icon (Obsidian squircle + subtle bottom-right install arrow badge) */
+/** 2. Setup Wizard Icon (Clean centered Obsidian squircle + Agendamea monogram, no corner badge) */
 const installerIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
@@ -150,33 +152,37 @@ const installerIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
       <stop offset="0%" stop-color="#1e1e24" />
       <stop offset="100%" stop-color="#09090b" />
     </linearGradient>
+    <linearGradient id="inst-edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
+    </linearGradient>
   </defs>
   <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#inst-bg)" />
-  <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="4" />
-  <g transform="translate(-14 -14) scale(0.94)">
+  <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="url(#inst-edge)" stroke-width="4" />
+  <g transform="translate(-4 3)">
     ${monogramPaths('#ffffff', '#ffffff')}
   </g>
-  <circle cx="388" cy="388" r="96" fill="#10b981" stroke="#09090b" stroke-width="18" />
-  <path d="M 388 344 L 388 424 M 356 394 L 388 426 L 420 394" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
 </svg>
 `;
 
-/** 3. Uninstaller Icon (Matching Obsidian squircle + refined muted-crimson remove cue) */
+/** 3. Uninstaller Icon (Clean centered Obsidian squircle + Agendamea monogram, no corner badge) */
 const uninstallerIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="uninst-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#221d21" />
+      <stop offset="0%" stop-color="#1e1e24" />
       <stop offset="100%" stop-color="#09090b" />
+    </linearGradient>
+    <linearGradient id="uninst-edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
     </linearGradient>
   </defs>
   <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#uninst-bg)" />
-  <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="4" />
-  <g transform="translate(-14 -14) scale(0.94)">
-    ${monogramPaths('#d4d4d8', '#d4d4d8')}
+  <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="url(#uninst-edge)" stroke-width="4" />
+  <g transform="translate(-4 3)">
+    ${monogramPaths('#e4e4e7', '#e4e4e7')}
   </g>
-  <circle cx="388" cy="388" r="96" fill="#dc2626" stroke="#09090b" stroke-width="18" />
-  <path d="M 358 358 L 418 418 M 418 358 L 358 418" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" />
 </svg>
 `;
 
@@ -244,7 +250,7 @@ const installerSidebarSvg = `<?xml version="1.0" encoding="UTF-8"?>
   <!-- Bottom Publisher Footer -->
   <line x1="36" y1="534" x2="292" y2="534" stroke="#ffffff" stroke-opacity="0.09" stroke-width="1.5" />
   <text x="36" y="566" fill="#fafafa" font-family="'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="700" letter-spacing="2.4">VELLIUM</text>
-  <text x="36" y="592" fill="#71717a" font-family="'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400">vellium.dev · v1.0.0</text>
+  <text x="36" y="592" fill="#71717a" font-family="'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400">vellium.dev</text>
 </svg>
 `;
 
@@ -309,12 +315,11 @@ const installerHeaderSvg = `<?xml version="1.0" encoding="UTF-8"?>
   <rect width="300" height="114" fill="#ffffff" />
   <g transform="translate(22 25)">
     <rect x="0" y="0" width="64" height="64" rx="16" fill="#09090b" />
-    <g transform="translate(4 4) scale(0.109375)">
+    <g transform="translate(3.5 4.3) scale(0.109375)">
       ${monogramPaths('#ffffff', '#ffffff')}
     </g>
   </g>
-  <text x="102" y="56" fill="#09090b" font-family="'Segoe UI', system-ui, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.6">Agendamea</text>
-  <text x="103" y="80" fill="#71717a" font-family="'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="500">VELLIUM · v1.0.0</text>
+  <text x="104" y="67" fill="#09090b" font-family="'Segoe UI', system-ui, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.6">Agendamea</text>
 </svg>
 `;
 

@@ -1045,11 +1045,6 @@ export default function App() {
 
   return (
     <div className="relative flex h-full w-full overflow-hidden bg-[var(--canvas)] text-[var(--text-primary)]">
-      {/* Ultra-minimal floating Windows 10/11 Window Controls at top-right */}
-      <div className="fixed top-2 right-2.5 z-40">
-        <WindowControls onNotify={handleWindowNotify} />
-      </div>
-
       {/* Sidebar Navigation (includes Search above Tüm Görevler & Minimal Mode) */}
       <Sidebar
         activeView={activeView}
@@ -1074,10 +1069,10 @@ export default function App() {
 
       {/* Main Content Area (No Top Header Bar) */}
       <div className="relative flex flex-1 min-w-0 flex-col h-full overflow-hidden">
-        {/* Subtle frameless drag strip for Windows Electron / PWA Window Controls Overlay */}
+        {/* Subtle frameless drag strip for Windows Electron / PWA Window Controls Overlay (leaves top-right clear for WindowControls) */}
         <div
           aria-hidden="true"
-          className="app-drag-region pointer-events-none absolute inset-x-0 top-0 z-10 h-9"
+          className="app-drag-region absolute left-0 right-36 top-0 z-10 h-9 select-none"
         />
 
         {/* Scrollable Workspace Viewport */}
@@ -1383,6 +1378,11 @@ export default function App() {
       )}
 
       <OfflineIndicator />
+
+      {/* Ultra-minimal floating Windows 10/11 Window Controls at top-right (mounted last & above drag strips) */}
+      <div className="app-no-drag fixed top-2 right-2.5 z-[60]">
+        <WindowControls onNotify={handleWindowNotify} />
+      </div>
     </div>
   );
 }

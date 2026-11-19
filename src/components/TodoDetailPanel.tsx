@@ -206,8 +206,14 @@ export function TodoDetailPanel({
   return (
     <aside
       aria-label="Görev detayları"
-      className="fixed inset-y-0 right-0 z-30 flex w-full max-w-[380px] flex-col border-l border-[var(--border)] bg-[var(--surface)] lg:static lg:z-auto lg:w-[368px] shrink-0"
+      className="fixed inset-y-0 right-0 z-30 flex w-full max-w-[380px] flex-col border-l border-[var(--border)] bg-[var(--surface)] lg:relative lg:z-auto lg:w-[368px] shrink-0"
     >
+      {/* Top frameless drag clearance (stops before top-right WindowControls) */}
+      <div
+        aria-hidden="true"
+        className="app-drag-region absolute left-0 right-36 top-0 z-10 h-9 select-none"
+      />
+
       {/* Top Bar with clean clearance below floating minimal top-right WindowControls */}
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 pt-11 pb-3">
         <div className="flex items-center gap-1.5">

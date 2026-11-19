@@ -623,6 +623,14 @@ async function startServer() {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  process.on('message', (msg) => {
+    if (msg === 'shutdown') {
+      shutdown();
+    }
+  });
+  process.on('disconnect', () => {
+    shutdown();
+  });
 }
 
 startServer().catch((err) => {
