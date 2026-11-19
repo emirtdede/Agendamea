@@ -1,12 +1,12 @@
-# Agendamea — Windows Masaustu ve Baslat Menusu Kisayol Olusturucu
+﻿# Agendamea — Windows Masaustu ve Baslat Menusu Kisayol Olusturucu
 $ErrorActionPreference = "Stop"
 
 $ProjectDir = Split-Path -Parent $PSScriptRoot
-$TargetBat = Join-Path $ProjectDir "Agendamea.bat"
+$TargetBat = Join-Path $PSScriptRoot "start-app.bat"
 $IconPath = Join-Path $ProjectDir "public\icons\agendamea.ico"
 
 if (-not (Test-Path $TargetBat)) {
-  throw "Agendamea.bat bulunamadi: $TargetBat"
+  throw "start-app.bat not found: $TargetBat"
 }
 if (-not (Test-Path $IconPath)) {
   throw "agendamea.ico bulunamadi: $IconPath"

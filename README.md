@@ -117,6 +117,8 @@ Agendamea/
 │   ├── icons/                      # Multi-resolution Web, Apple & Windows tile icons
 │   └── logos/                      # Agendamea SVG/PNG brand marks (dark & light)
 ├── scripts/
+│   ├── start-app.bat               # Windows local app & server launcher
+│   ├── build-windows.bat           # Automated Windows NSIS .exe builder
 │   ├── build-server.mjs            # esbuild server bundler (dist-server/server.mjs)
 │   ├── generate-icons.mjs          # Sharp-based multi-platform icon generator
 │   ├── generate-installer-assets.mjs
@@ -290,6 +292,8 @@ Agendamea/
 │   ├── icons/                      # Web, Apple ve Windows kutucuk ikonları
 │   └── logos/                      # Agendamea SVG/PNG marka logoları (koyu & açık)
 ├── scripts/
+│   ├── start-app.bat               # Windows yerel uygulama ve sunucu başlatıcı
+│   ├── build-windows.bat           # Otomatik Windows NSIS .exe derleyici
 │   ├── build-server.mjs            # esbuild sunucu derleyicisi (dist-server/server.mjs)
 │   ├── generate-icons.mjs          # Sharp tabanlı çoklu platform ikon üreticisi
 │   ├── generate-installer-assets.mjs
