@@ -29,12 +29,12 @@ buildDependenciesFromSource: false
 
 win:
   icon: electron-resources/icon.ico
-  publisherName: Vellium
-  legalTrademarks: "Agendamea — Vellium (vellium.dev)"
+  legalTrademarks: "Agendamea - Vellium (vellium.dev)"
   requestedExecutionLevel: asInvoker
-  signingHashAlgorithms:
-    - sha256
-  rfc3161TimeStampServer: http://timestamp.digicert.com
+  signtoolOptions:
+    signingHashAlgorithms:
+      - sha256
+    rfc3161TimeStampServer: http://timestamp.digicert.com
   artifactName: "Agendamea-Setup-${version}-win-${arch}.${ext}"
   target:
     - target: nsis
