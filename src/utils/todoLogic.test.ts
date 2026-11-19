@@ -866,7 +866,7 @@ test('QA: Windows 11 Electron installer/uninstaller assets, BMP headers, UTF-8 B
   // 4. Validate electron-builder.yml & package.json alignment
   const builderYml = fs.readFileSync(path.join(root, 'electron-builder.yml'), 'utf8');
   assert.ok(builderYml.includes('appId: dev.vellium.agendamea'));
-  assert.ok(builderYml.includes('publisherName: Vellium'));
+  assert.ok(builderYml.includes('Vellium (vellium.dev)'));
   assert.ok(builderYml.includes('installerSidebar: electron-resources/installerSidebar.bmp'));
   assert.ok(builderYml.includes('uninstallerSidebar: electron-resources/uninstallerSidebar.bmp'));
   assert.ok(builderYml.includes('installerHeader: electron-resources/installerHeader.bmp'));
