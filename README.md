@@ -1,12 +1,12 @@
 <div align="center">
 
 <a href="https://vellium.dev" target="_blank" rel="noopener noreferrer">
-  <img src="public/logos/agendamea-logo-dark.svg" alt="Agendamea — Vellium" width="360" />
+  <img src="assets/vellium-banner.svg" alt="Vellium - Intelligent · Reliable · Enduring" width="100%" />
 </a>
 
 <br /><br />
 
-# ✦ Agendamea — Offline-First Minimalist Task & Daily Planner
+# ✦ Agendamea - Offline-First Minimalist Task & Daily Planner
 
 </div>
 
@@ -43,7 +43,7 @@
 
 <div align="center">
   <img src="public/logos/agendamea-mark-dark.svg" alt="Agendamea Mark" width="96" />
-  <h3>Agendamea — Fast, Offline-First Windows Task &amp; Daily Planner</h3>
+  <h3>Agendamea - Fast, Offline-First Windows Task &amp; Daily Planner</h3>
   <p><em>Local-First SQLite Architecture, Instant Persistence, and 14 Dual-Mode Color Themes</em></p>
   <p><strong>Developed &amp; Published by <a href="https://vellium.dev">Vellium</a></strong></p>
 </div>
@@ -54,28 +54,28 @@
 
 **Agendamea** is an offline-first, local-first task manager and daily planner built for **Windows Desktop (Electron 45)** and **Progressive Web App (PWA)** environments using **React 19**, **TypeScript 7**, **Express 4**, and **SQLite (`better-sqlite3`)**.
 
-Designed around zero-friction daily planning, **Agendamea** persists every edit—task creation, subtask toggling, drag-and-drop reordering, category pinning, and theme selection—instantly to a local **WAL-mode SQLite** database. No cloud accounts, no internet connection, and no external telemetry are required.
+Designed around zero-friction daily planning, **Agendamea** persists every edit - task creation, subtask toggling, drag-and-drop reordering, category pinning, and theme selection - instantly to a local **WAL-mode SQLite** database. No cloud accounts, no internet connection, and no external telemetry are required.
 
 ---
 
 ## 🚀 Key Features
 
 - **Offline-First SQLite Engine (`better-sqlite3`)**:
-  - Runs with `journal_mode = WAL`, `foreign_keys = ON`, and `busy_timeout = 5000`.
-  - Versioned schema migrations via `PRAGMA user_version` (currently `v3`).
-  - Full JSON **Export & Import** (`/api/export`, `/api/import`) with strict payload limits and validation.
+ - Runs with `journal_mode = WAL`, `foreign_keys = ON`, and `busy_timeout = 5000`.
+ - Versioned schema migrations via `PRAGMA user_version` (currently `v3`).
+ - Full JSON **Export & Import** (`/api/export`, `/api/import`) with strict payload limits and validation.
 - **Native Windows Desktop (Electron 45) + PWA**:
-  - **Single-Instance Lock**: Prevents duplicate windows and database lock collisions (`app.requestSingleInstanceLock()`).
-  - **Deterministic Local Port (`47821`)**: Binds to `127.0.0.1` on Windows to preserve `localStorage` anti-FOUC theme caching across restarts.
-  - **Installable PWA**: Configured with `vite-plugin-pwa`, Workbox asset caching, and quick app shortcuts (`New Task`, `Today`, `Important`).
+ - **Single-Instance Lock**: Prevents duplicate windows and database lock collisions (`app.requestSingleInstanceLock()`).
+ - **Deterministic Local Port (`47821`)**: Binds to `127.0.0.1` on Windows to preserve `localStorage` anti-FOUC theme caching across restarts.
+ - **Installable PWA**: Configured with `vite-plugin-pwa`, Workbox asset caching, and quick app shortcuts (`New Task`, `Today`, `Important`).
 - **Smart Views, Priorities & Subtasks**:
-  - Built-in smart views (`All`, `Today`, `Important`, `Completed`), custom categories with color pickers & pinning, `low` / `normal` / `high` priorities, `YYYY-MM-DD` due dates, inline subtasks, and manual drag-and-drop sorting.
+ - Built-in smart views (`All`, `Today`, `Important`, `Completed`), custom categories with color pickers & pinning, `low` / `normal` / `high` priorities, `YYYY-MM-DD` due dates, inline subtasks, and manual drag-and-drop sorting.
 - **Soft-Delete Trash & Recovery**:
-  - Deleted tasks and categories move to a recoverable Trash bin with one-click restore or permanent purge (`/api/trash`).
+ - Deleted tasks and categories move to a recoverable Trash bin with one-click restore or permanent purge (`/api/trash`).
 - **14 Dual-Mode Color Themes (28 Palettes)**:
-  - `Obsidian`, `Slate`, `Navy`, `Blue`, `Cyan`, `Purple`, `Red`, `Orange`, `Yellow`, `Emerald`, `Grass`, `Lime`, `Pink`, and `Indigo`—each with curated `light` and `dark` tokens.
+ - `Obsidian`, `Slate`, `Navy`, `Blue`, `Cyan`, `Purple`, `Red`, `Orange`, `Yellow`, `Emerald`, `Grass`, `Lime`, `Pink`, and `Indigo` - each with curated `light` and `dark` tokens.
 - **Hardened Localhost Security**:
-  - Sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, and allowlists external navigation (`vellium.dev`, `github.com`).
+ - Sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, and allowlists external navigation (`vellium.dev`, `github.com`).
 
 ---
 
@@ -216,7 +216,7 @@ flowchart LR
 
 <div align="center">
   <img src="public/logos/agendamea-mark-dark.svg" alt="Agendamea Mark" width="96" />
-  <h3>Agendamea — İnternetsiz Çalışan Sade ve Hızlı Windows Görev Yöneticisi</h3>
+  <h3>Agendamea - İnternetsiz Çalışan Sade ve Hızlı Windows Görev Yöneticisi</h3>
   <p><em>Yerel Öncelikli SQLite Mimarisi, Anlık Kayıt ve 14 Çift Modlu Renk Teması</em></p>
   <p><strong>Geliştirici ve Yayıncı: <a href="https://vellium.dev">Vellium</a></strong></p>
 </div>
@@ -234,21 +234,21 @@ Sıfır sürtünmeli günlük planlama için tasarlanan **Agendamea**, oluşturd
 ## 🚀 Key Features (Önemli Özellikler)
 
 - **Çevrimdışı Öncelikli SQLite Motoru (`better-sqlite3`)**:
-  - `journal_mode = WAL`, `foreign_keys = ON` ve `busy_timeout = 5000` ayarlarıyla yüksek kararlılık.
-  - `PRAGMA user_version` (`v3`) üzerinden güvenli şema göçleri.
-  - Katı doğrulama ve boyut sınırlarıyla tam JSON **Dışa / İçe Aktarma** (`/api/export`, `/api/import`).
+ - `journal_mode = WAL`, `foreign_keys = ON` ve `busy_timeout = 5000` ayarlarıyla yüksek kararlılık.
+ - `PRAGMA user_version` (`v3`) üzerinden güvenli şema göçleri.
+ - Katı doğrulama ve boyut sınırlarıyla tam JSON **Dışa / İçe Aktarma** (`/api/export`, `/api/import`).
 - **Yerel Windows Masaüstü (Electron 45) + PWA**:
-  - **Tekil Örnek Kilidi (`requestSingleInstanceLock`)**: Çift pencere açılmasını ve veritabanı çakışmasını engeller.
-  - **Sabit Yerel Port (`47821`)**: Windows'ta `127.0.0.1` üzerinde çalışarak `localStorage` tema önbelleğini yeniden başlatmalarda korur.
-  - **Kurulabilir PWA**: `vite-plugin-pwa`, Workbox önbellekleme ve hızlı kısayollar (`Yeni Görev`, `Bugün`, `Önemli`).
+ - **Tekil Örnek Kilidi (`requestSingleInstanceLock`)**: Çift pencere açılmasını ve veritabanı çakışmasını engeller.
+ - **Sabit Yerel Port (`47821`)**: Windows'ta `127.0.0.1` üzerinde çalışarak `localStorage` tema önbelleğini yeniden başlatmalarda korur.
+ - **Kurulabilir PWA**: `vite-plugin-pwa`, Workbox önbellekleme ve hızlı kısayollar (`Yeni Görev`, `Bugün`, `Önemli`).
 - **Akıllı Görünümler, Öncelikler ve Alt Görevler**:
-  - `Tümü`, `Bugün`, `Önemli`, `Tamamlananlar` akıllı görünümleri; renk seçicili ve sabitlenebilir kategoriler; `düşük` / `normal` / `yüksek` öncelikler; `YYYY-AA-GG` bitiş tarihleri; alt görevler ve sürükle-bırak sıralama.
+ - `Tümü`, `Bugün`, `Önemli`, `Tamamlananlar` akıllı görünümleri; renk seçicili ve sabitlenebilir kategoriler; `düşük` / `normal` / `yüksek` öncelikler; `YYYY-AA-GG` bitiş tarihleri; alt görevler ve sürükle-bırak sıralama.
 - **Çöp Kutusu & Geri Yükleme**:
-  - Silinen görev ve kategoriler geçici olarak Çöp Kutusu'na taşınır; tek tıkla geri yüklenebilir veya kalıcı olarak temizlenebilir (`/api/trash`).
+ - Silinen görev ve kategoriler geçici olarak Çöp Kutusu'na taşınır; tek tıkla geri yüklenebilir veya kalıcı olarak temizlenebilir (`/api/trash`).
 - **14 Çift Modlu Renk Teması (28 Palet)**:
-  - `Siyah (Obsidian)`, `Gri`, `Lacivert`, `Mavi`, `Camgöbeği`, `Mor`, `Kırmızı`, `Turuncu`, `Sarı`, `Zümrüt`, `Çimen`, `Limon`, `Pembe` ve `Çivit` — her biri aydınlık (`light`) ve karanlık (`dark`) varyantlarıyla.
+ - `Siyah (Obsidian)`, `Gri`, `Lacivert`, `Mavi`, `Camgöbeği`, `Mor`, `Kırmızı`, `Turuncu`, `Sarı`, `Zümrüt`, `Çimen`, `Limon`, `Pembe` ve `Çivit` - her biri aydınlık (`light`) ve karanlık (`dark`) varyantlarıyla.
 - **Güçlendirilmiş Yerel Güvenlik**:
-  - `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, `Permissions-Policy` başlıkları ve yalnızca izinli dış bağlantılar (`vellium.dev`, `github.com`).
+ - `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, `Permissions-Policy` başlıkları ve yalnızca izinli dış bağlantılar (`vellium.dev`, `github.com`).
 
 ---
 
