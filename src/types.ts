@@ -1,0 +1,102 @@
+export type Priority = 'low' | 'normal' | 'high';
+
+export type ThemeMode = 'light' | 'dark';
+
+export type ThemeId =
+  | 'obsidian'
+  | 'slate'
+  | 'navy'
+  | 'blue'
+  | 'cyan'
+  | 'purple'
+  | 'red'
+  | 'orange'
+  | 'yellow'
+  | 'emerald'
+  | 'grass'
+  | 'lime'
+  | 'pink'
+  | 'indigo';
+
+export type SmartView = 'all' | 'today' | 'important' | 'completed';
+
+export type ActiveView =
+  | { type: 'smart'; id: SmartView }
+  | { type: 'category'; id: string };
+
+export type StatusFilter = 'all' | 'active' | 'completed';
+
+export type SortOption = 'manual' | 'priority' | 'dueDate' | 'newest';
+
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+  pinned: boolean;
+  sortOrder: number;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export interface Subtask {
+  id: string;
+  todoId: string;
+  title: string;
+  completed: boolean;
+  sortOrder: number;
+}
+
+export interface Todo {
+  id: string;
+  title: string;
+  notes: string;
+  completed: boolean;
+  important: boolean;
+  pinned: boolean;
+  priority: Priority;
+  dueDate: string | null; // YYYY-MM-DD or null
+  categoryId: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  subtasks: Subtask[];
+}
+
+export interface AppSettings {
+  themeMode: ThemeMode;
+  themeId: ThemeId;
+  dragLocked: boolean;
+  sidebarCollapsed: boolean;
+  themeCustomized?: boolean;
+}
+
+export interface BootstrapPayload {
+  categories: Category[];
+  todos: Todo[];
+  trashedCategories: Category[];
+  trashedTodos: Todo[];
+  settings: AppSettings;
+}
+
+export interface CategoryPatch {
+  name?: string;
+  color?: string;
+  pinned?: boolean;
+}
+
+export interface TodoPatch {
+  title?: string;
+  notes?: string;
+  completed?: boolean;
+  important?: boolean;
+  pinned?: boolean;
+  priority?: Priority;
+  dueDate?: string | null;
+  categoryId?: string | null;
+}
+
+export interface SubtaskPatch {
+  title?: string;
+  completed?: boolean;
+}

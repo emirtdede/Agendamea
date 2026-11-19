@@ -1,0 +1,68 @@
+appId: dev.vellium.agendamea
+productName: Agendamea
+copyright: "Copyright © 2026 Vellium (vellium.dev)"
+
+directories:
+  buildResources: electron-resources
+  output: release
+
+asar: true
+asarUnpack:
+  - "dist/**"
+  - "dist-server/**"
+  - "node_modules/better-sqlite3/**"
+  - "node_modules/bindings/**"
+  - "node_modules/file-uri-to-path/**"
+
+files:
+  - "dist/**"
+  - "dist-server/**"
+  - "electron/**"
+  - "package.json"
+  - "!node_modules/**"
+  - "node_modules/better-sqlite3/**"
+  - "node_modules/bindings/**"
+  - "node_modules/file-uri-to-path/**"
+
+npmRebuild: true
+buildDependenciesFromSource: false
+
+win:
+  icon: electron-resources/icon.ico
+  publisherName: Vellium
+  legalTrademarks: "Agendamea — Vellium (vellium.dev)"
+  requestedExecutionLevel: asInvoker
+  signingHashAlgorithms:
+    - sha256
+  rfc3161TimeStampServer: http://timestamp.digicert.com
+  artifactName: "Agendamea-Setup-${version}-win-${arch}.${ext}"
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Agendamea
+  menuCategory: false
+  uninstallDisplayName: Agendamea
+  installerIcon: electron-resources/installer.ico
+  uninstallerIcon: electron-resources/uninstaller.ico
+  installerHeaderIcon: electron-resources/icon.ico
+  installerSidebar: electron-resources/installerSidebar.bmp
+  uninstallerSidebar: electron-resources/uninstallerSidebar.bmp
+  installerHeader: electron-resources/installerHeader.bmp
+  include: electron-resources/installer.nsh
+  installerLanguages:
+    - tr_TR
+    - en_US
+  language: "1055"
+  unicode: true
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+  displayLanguageSelector: false

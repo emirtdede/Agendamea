@@ -1,0 +1,882 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import {
+  addDaysToDateString,
+  computeViewCounts,
+  filterAndSortTodos,
+  formatDueDateLabel,
+  getVerticalDropPosition,
+  isValidIsoDateString,
+  moveIdRelative,
+  sortCategoriesWithPin,
+} from './todoLogic';
+import {
+  CATEGORY_COLORS,
+  COLOR_THEMES,
+  isValidThemeId,
+  normalizeHexColor,
+} from './themes';
+import { TodoDatabase, ValidationError } from '../db/database';
+import type { Category, Todo } from '../types';
+
+const sampleCategories: Category[] = [
+  {
+    id: 'c1',
+    name: 'İş',
+    color: '#059669',
+    pinned: false,
+    sortOrder: 0,
+    createdAt: '2026-11-19T08:00:00.000Z',
+    deletedAt: null,
+  },
+  {
+    id: 'c2',
+    name: 'Kişisel',
+    color: '#2563eb',
+    pinned: false,
+    sortOrder: 1,
+    createdAt: '2026-11-19T08:00:00.000Z',
+    deletedAt: null,
+  },
+];
+
+const sampleTodos: Todo[] = [
+  {
+    id: 't1',
+    title: 'İstanbul sunumunu hazırla',
+    notes: 'Grafikleri ekle',
+    completed: false,
+    important: true,
+    pinned: false,
+    priority: 'high',
+    dueDate: '2026-11-19',
+    categoryId: 'c1',
+    sortOrder: 1,
+    createdAt: '2026-11-19T08:00:00.000Z',
+    updatedAt: '2026-11-19T08:00:00.000Z',
+    deletedAt: null,
+    subtasks: [{ id: 's1', todoId: 't1', title: 'Kapak sayfası', completed: false, sortOrder: 0 }],
+  },
+  {
+    id: 't2',
+    title: 'Spor çantasını hazırla',
+    notes: '',
+    completed: false,
+    important: false,
+    pinned: false,
+    priority: 'low',
+    dueDate: '2026-11-20',
+    categoryId: 'c2',
+    sortOrder: 0,
+    createdAt: '2026-11-19T09:00:00.000Z',
+    updatedAt: '2026-11-19T09:00:00.000Z',
+    deletedAt: null,
+    subtasks: [],
+  },
+  {
+    id: 't3',
+    title: 'Fatura öde',
+    notes: 'Elektrik',
+    completed: true,
+    important: false,
+    pinned: false,
+    priority: 'normal',
+    dueDate: '2026-11-18',
+    categoryId: 'c2',
+    sortOrder: 2,
+    createdAt: '2026-11-18T10:00:00.000Z',
+    updatedAt: '2026-11-18T10:00:00.000Z',
+    deletedAt: null,
+    subtasks: [],
+  },
+];
+
+test('filterAndSortTodos handles Turkish case-insensitive search and subtasks', () => {
+  const res = filterAndSortTodos({
+    todos: sampleTodos,
+    activeView: { type: 'smart', id: 'all' },
+    statusFilter: 'all',
+    searchQuery: 'istanbul',
+    sortBy: 'manual',
+    todayStr: '2026-11-19',
+  });
+  assert.equal(res.length, 1);
+  assert.equal(res[0].id, 't1');
+
+  const subRes = filterAndSortTodos({
+    todos: sampleTodos,
+    activeView: { type: 'smart', id: 'all' },
+    statusFilter: 'all',
+    searchQuery: 'kapak',
+    sortBy: 'manual',
+    todayStr: '2026-11-19',
+  });
+  assert.equal(subRes.length, 1);
+  assert.equal(subRes[0].id, 't1');
+});
+
+test('filterAndSortTodos sorts by priority while keeping completed at the bottom', () => {
+  const res = filterAndSortTodos({
+    todos: sampleTodos,
+    activeView: { type: 'smart', id: 'all' },
+    statusFilter: 'all',
+    searchQuery: '',
+    sortBy: 'priority',
+    todayStr: '2026-11-19',
+  });
+  assert.deepEqual(
+    res.map((t) => t.id),
+    ['t1', 't2', 't3'],
+  );
+});
+
+test('computeViewCounts tallies smart views and categories accurately', () => {
+  const counts = computeViewCounts(sampleTodos, sampleCategories, '2026-11-19');
+  assert.equal(counts.smart.all, 2);
+  assert.equal(counts.smart.today, 1);
+  assert.equal(counts.smart.important, 1);
+  assert.equal(counts.smart.completed, 1);
+  assert.equal(counts.categories.c1, 1);
+  assert.equal(counts.categories.c2, 1);
+});
+
+test('formatDueDateLabel identifies Bugün, Yarın, Dün, and overdue state', () => {
+  assert.deepEqual(formatDueDateLabel('2026-11-19', '2026-11-19'), {
+    label: 'Bugün',
+    isOverdue: false,
+    isToday: true,
+  });
+  assert.deepEqual(formatDueDateLabel(addDaysToDateString('2026-11-19', 1), '2026-11-19'), {
+    label: 'Yarın',
+    isOverdue: false,
+    isToday: false,
+  });
+  assert.deepEqual(formatDueDateLabel('2026-11-18', '2026-11-19'), {
+    label: 'Dün',
+    isOverdue: true,
+    isToday: false,
+  });
+});
+
+test('formatDueDateLabel handles invalid dates safely without throwing RangeError', () => {
+  assert.equal(isValidIsoDateString('2026-11-19'), true);
+  assert.equal(isValidIsoDateString('2026-02-31'), false);
+  assert.equal(isValidIsoDateString('not-a-date'), false);
+  assert.equal(formatDueDateLabel('2026-99-99', '2026-11-19'), null);
+  assert.equal(formatDueDateLabel('invalid', '2026-11-19'), null);
+});
+
+test('COLOR_THEMES covers all requested colors with complete Light and Dark tokens', () => {
+  const required = [
+    'obsidian',
+    'slate',
+    'navy',
+    'blue',
+    'cyan',
+    'purple',
+    'red',
+    'yellow',
+    'emerald',
+    'grass',
+    'lime',
+    'pink',
+  ];
+  for (const id of required) {
+    assert.equal(isValidThemeId(id), true, `Missing required theme: ${id}`);
+  }
+  assert.ok(COLOR_THEMES.length >= 14);
+  for (const theme of COLOR_THEMES) {
+    assert.ok(theme.light.canvas && theme.light.accent && theme.light.accentFg);
+    assert.ok(theme.dark.canvas && theme.dark.accent && theme.dark.accentFg);
+  }
+});
+
+test('QA: Fresh SQLite database starts clean with zero dummy test data', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    const boot = db.getBootstrap();
+    assert.equal(boot.categories.length, 0);
+    assert.equal(boot.todos.length, 0);
+    assert.equal(boot.trashedCategories.length, 0);
+    assert.equal(boot.trashedTodos.length, 0);
+    assert.deepEqual(boot.settings, {
+      themeMode: 'light',
+      themeId: 'obsidian',
+      dragLocked: false,
+      sidebarCollapsed: false,
+      themeCustomized: false,
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test('QA: Soft delete, restore, and permanent delete for todos and categories', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    const cat = db.createCategory({ name: 'İş', color: '#059669' });
+    const todo = db.createTodo({
+      title: 'Raporu tamamla',
+      notes: 'Q4 özet',
+      priority: 'high',
+      categoryId: cat.id,
+    });
+    const sub = db.createSubtask(todo.id, 'Grafikleri ekle');
+    assert.ok(sub);
+
+    // 1. Soft delete todo -> leaves active list, enters trash with subtasks intact
+    const trashedTodo = db.softDeleteTodo(todo.id);
+    assert.ok(trashedTodo && trashedTodo.deletedAt !== null);
+    assert.equal(db.getTodos().length, 0);
+    assert.equal(db.getTrashedTodos().length, 1);
+    assert.equal(db.getTrashedTodos()[0].subtasks.length, 1);
+
+    // 2. Restore todo -> returns to active list with subtasks intact
+    const restoredTodo = db.restoreTodo(todo.id);
+    assert.ok(restoredTodo && restoredTodo.deletedAt === null);
+    assert.equal(db.getTodos().length, 1);
+    assert.equal(db.getTrashedTodos().length, 0);
+    assert.equal(db.getTodos()[0].subtasks[0].title, 'Grafikleri ekle');
+
+    // 3. Soft delete category -> leaves active list, enters trash, todo link preserved in DB
+    const trashedCat = db.softDeleteCategory(cat.id);
+    assert.ok(trashedCat && trashedCat.deletedAt !== null);
+    assert.equal(db.getCategories().length, 0);
+    assert.equal(db.getTrashedCategories().length, 1);
+
+    // 4. Restore category -> re-links automatically with existing todo
+    const restoredCat = db.restoreCategory(cat.id);
+    assert.ok(restoredCat && restoredCat.deletedAt === null);
+    assert.equal(db.getCategories().length, 1);
+    assert.equal(db.getTodos()[0].categoryId, cat.id);
+
+    // 5. Soft delete category then permanent delete -> todo preserved as uncategorized (categoryId = null)
+    db.softDeleteCategory(cat.id);
+    assert.equal(db.permanentDeleteCategory(cat.id), true);
+    assert.equal(db.getTrashedCategories().length, 0);
+    assert.equal(db.getTodos().length, 1);
+    assert.equal(db.getTodos()[0].categoryId, null);
+
+    // 6. Soft delete completed todos (clearCompleted) -> goes to trash, not hard-deleted
+    db.updateTodo(todo.id, { completed: true });
+    const cleared = db.clearCompleted();
+    assert.equal(cleared.length, 1);
+    assert.equal(db.getTodos().length, 0);
+    assert.equal(db.getTrashedTodos().length, 1);
+
+    // 7. Empty trash permanently wipes trashed items only
+    const activeTodo = db.createTodo({ title: 'Aktif görev' });
+    const emptied = db.emptyTrash();
+    assert.equal(emptied.deletedTodos, 1);
+    assert.equal(db.getTrashedTodos().length, 0);
+    assert.equal(db.getTodos().length, 1);
+    assert.equal(db.getTodos()[0].id, activeTodo.id);
+  } finally {
+    db.close();
+  }
+});
+
+test('QA: Schema auto-migration upgrades legacy DB without deleted_at columns safely', () => {
+  const tmpFile = path.join(os.tmpdir(), `agendamea-migrate-${Date.now()}.db`);
+  try {
+    // Create legacy schema without deleted_at
+    const legacy = new Database(tmpFile);
+    legacy.exec(`
+      CREATE TABLE categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE todos (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        notes TEXT NOT NULL,
+        completed INTEGER NOT NULL,
+        important INTEGER NOT NULL,
+        priority TEXT NOT NULL,
+        due_date TEXT,
+        category_id TEXT,
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO categories VALUES ('old-c1', 'Eski Kategori', '#2563eb', 0, '2026-01-01T00:00:00.000Z');
+      INSERT INTO todos VALUES ('old-t1', 'Eski Görev', 'Not', 0, 0, 'normal', NULL, 'old-c1', 0, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    `);
+    legacy.close();
+
+    // Open with TodoDatabase -> should migrate seamlessly and preserve rows
+    const migrated = new TodoDatabase(tmpFile);
+    try {
+      const boot = migrated.getBootstrap();
+      assert.equal(boot.categories.length, 1);
+      assert.equal(boot.categories[0].name, 'Eski Kategori');
+      assert.equal(boot.todos.length, 1);
+      assert.equal(boot.todos[0].title, 'Eski Görev');
+      assert.ok(migrated.softDeleteTodo('old-t1'));
+      assert.equal(migrated.getTodos().length, 0);
+      assert.equal(migrated.getTrashedTodos().length, 1);
+    } finally {
+      migrated.close();
+    }
+  } finally {
+    for (const suffix of ['', '-wal', '-shm']) {
+      if (fs.existsSync(tmpFile + suffix)) fs.unlinkSync(tmpFile + suffix);
+    }
+  }
+});
+
+test('QA: Edge cases reject blank titles and handle Turkish + special characters safely', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    assert.throws(() => db.createTodo({ title: '   ' }));
+    assert.throws(() => db.createCategory({ name: '   ' }));
+
+    const tricky = `<script>alert("x")</script> & ŞĞÜÖÇİı ' " -- ; DROP TABLE todos;`;
+    const todo = db.createTodo({ title: tricky, notes: tricky });
+    const loaded = db.getTodoById(todo.id);
+    assert.equal(loaded?.title, tricky);
+    assert.equal(loaded?.notes, tricky);
+
+    // Permanent delete refuses to hard-delete an active (non-trashed) record
+    assert.equal(db.permanentDeleteTodo(todo.id), false);
+    assert.equal(db.getTodos().length, 1);
+  } finally {
+    db.close();
+  }
+});
+
+test('Performance: 1,000 todos + 50 categories + 500 subtasks stay fast under load', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    const tInsertStart = performance.now();
+    const catIds: string[] = [];
+    for (let c = 0; c < 50; c++) {
+      catIds.push(db.createCategory({ name: `Kategori ${c}`, color: '#2563eb' }).id);
+    }
+    const todoIds: string[] = [];
+    for (let i = 0; i < 1000; i++) {
+      const t = db.createTodo({
+        title: `Görev ${i} — İstanbul planlaması`,
+        notes: i % 3 === 0 ? 'Önemli not içeriği' : '',
+        priority: i % 5 === 0 ? 'high' : i % 4 === 0 ? 'low' : 'normal',
+        important: i % 7 === 0,
+        completed: i % 6 === 0,
+        dueDate: i % 4 === 0 ? '2026-11-19' : null,
+        categoryId: catIds[i % catIds.length],
+        subtasks: i < 500 ? [{ title: `Alt adım ${i}` }] : undefined,
+      });
+      todoIds.push(t.id);
+    }
+    const insertMs = performance.now() - tInsertStart;
+
+    const tBootStart = performance.now();
+    const boot = db.getBootstrap();
+    const bootMs = performance.now() - tBootStart;
+
+    const tFilterStart = performance.now();
+    const filtered = filterAndSortTodos({
+      todos: boot.todos,
+      activeView: { type: 'smart', id: 'all' },
+      statusFilter: 'active',
+      searchQuery: 'istanbul',
+      sortBy: 'priority',
+      todayStr: '2026-11-19',
+    });
+    const filterMs = performance.now() - tFilterStart;
+
+    const tCountStart = performance.now();
+    const counts = computeViewCounts(boot.todos, boot.categories, '2026-11-19');
+    const countMs = performance.now() - tCountStart;
+
+    const tSoftDeleteStart = performance.now();
+    db.softDeleteTodo(todoIds[0]);
+    db.restoreTodo(todoIds[0]);
+    const softRestoreMs = performance.now() - tSoftDeleteStart;
+
+    const tReorderStart = performance.now();
+    db.reorderTodos([...todoIds].reverse());
+    const reorderMs = performance.now() - tReorderStart;
+
+    assert.equal(boot.todos.length, 1000);
+    assert.equal(boot.categories.length, 50);
+    assert.ok(filtered.length > 800);
+    assert.equal(counts.smart.all + counts.smart.completed, 1000);
+
+    // Performance SLA assertions
+    assert.ok(bootMs < 150, `Bootstrap too slow: ${bootMs.toFixed(1)}ms`);
+    assert.ok(filterMs < 50, `Filter/sort too slow: ${filterMs.toFixed(1)}ms`);
+    assert.ok(countMs < 20, `View count too slow: ${countMs.toFixed(1)}ms`);
+    assert.ok(softRestoreMs < 15, `Soft-delete+restore too slow: ${softRestoreMs.toFixed(1)}ms`);
+    assert.ok(reorderMs < 100, `Reorder 1000 rows too slow: ${reorderMs.toFixed(1)}ms`);
+
+    console.log(
+      `[PERF] 1000 todos + 50 cats + 500 subtasks | insert=${insertMs.toFixed(1)}ms | bootstrap=${bootMs.toFixed(1)}ms | filter+sort=${filterMs.toFixed(1)}ms | counts=${countMs.toFixed(1)}ms | softDelete+restore=${softRestoreMs.toFixed(1)}ms | reorder1000=${reorderMs.toFixed(1)}ms`,
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('CATEGORY_COLORS has 8 primary/secondary colors including white, and normalizeHexColor validates HEX codes', () => {
+  assert.equal(CATEGORY_COLORS.length, 8);
+  const hexes = CATEGORY_COLORS.map((c) => c.hex.toLowerCase());
+  assert.equal(new Set(hexes).size, 8);
+  assert.ok(hexes.includes('#ffffff'), 'White must be included in CATEGORY_COLORS');
+  assert.ok(hexes.includes('#dc2626'), 'Red primary must be included');
+  assert.ok(hexes.includes('#2563eb'), 'Blue primary must be included');
+  assert.ok(hexes.includes('#eab308'), 'Yellow primary must be included');
+
+  assert.equal(normalizeHexColor('#ABC'), '#aabbcc');
+  assert.equal(normalizeHexColor('ff00aa'), '#ff00aa');
+  assert.equal(normalizeHexColor('#00C2A8'), '#00c2a8');
+  assert.equal(normalizeHexColor('zzz'), null);
+  assert.equal(normalizeHexColor('#12'), null);
+  assert.equal(normalizeHexColor(''), null);
+});
+
+test('QA: Agendamea Windows, Microsoft Store, and PWA icons & logos exist with valid headers', () => {
+  const requiredFiles = [
+    'public/favicon.ico',
+    'public/icon.svg',
+    'public/icon-maskable.svg',
+    'public/pwa-192x192.png',
+    'public/pwa-512x512.png',
+    'public/pwa-maskable-192x192.png',
+    'public/pwa-maskable-512x512.png',
+    'public/apple-touch-icon.png',
+    'public/browserconfig.xml',
+    'public/og-image.png',
+    'public/icons/agendamea.ico',
+    'public/icons/favicon-16x16.png',
+    'public/icons/favicon-32x32.png',
+    'public/icons/icon-1024x1024.png',
+    'public/icons/icon-512x512.webp',
+    'public/icons/mstile-144x144.png',
+    'public/icons/mstile-310x150.png',
+    'public/icons/windows/SmallTile.scale-100.png',
+    'public/icons/windows/Square44x44Logo.targetsize-256.png',
+    'public/icons/windows/Square150x150Logo.scale-200.png',
+    'public/icons/windows/Wide310x150Logo.scale-200.png',
+    'public/icons/windows/LargeTile.scale-200.png',
+    'public/icons/windows/StoreLogo.scale-200.png',
+    'public/icons/windows/SplashScreen.scale-200.png',
+    'public/logos/agendamea-logo-light.svg',
+    'public/logos/agendamea-logo-dark.svg',
+    'public/logos/agendamea-logo-light.png',
+    'public/logos/agendamea-logo-dark.png',
+  ];
+
+  for (const rel of requiredFiles) {
+    const full = path.join(process.cwd(), rel);
+    assert.ok(fs.existsSync(full), `Missing asset: ${rel}`);
+    const stat = fs.statSync(full);
+    assert.ok(stat.size > 100, `Asset unexpectedly empty: ${rel}`);
+  }
+
+  // Verify Windows ICO header (00 00 01 00 + 7 embedded resolutions: 16..256)
+  const ico = fs.readFileSync(path.join(process.cwd(), 'public/favicon.ico'));
+  assert.equal(ico.readUInt16LE(0), 0);
+  assert.equal(ico.readUInt16LE(2), 1);
+  assert.equal(ico.readUInt16LE(4), 7);
+});
+
+test('QA: moveIdRelative and SQLite category reordering + dragLocked setting persist cleanly', () => {
+  assert.deepEqual(moveIdRelative(['a', 'b', 'c', 'd'], 'a', 'c', 'after'), ['b', 'c', 'a', 'd']);
+  assert.deepEqual(moveIdRelative(['a', 'b', 'c', 'd'], 'd', 'b', 'before'), ['a', 'd', 'b', 'c']);
+  assert.deepEqual(moveIdRelative(['a', 'b', 'c'], 'b', 'b', 'before'), ['a', 'b', 'c']);
+
+  const db = new TodoDatabase(':memory:');
+  try {
+    const c1 = db.createCategory({ name: 'Bir', color: '#dc2626' });
+    const c2 = db.createCategory({ name: 'İki', color: '#2563eb' });
+    const c3 = db.createCategory({ name: 'Üç', color: '#16a34a' });
+
+    db.reorderCategories([c3.id, c1.id, c2.id]);
+    assert.deepEqual(
+      db.getCategories().map((c) => c.id),
+      [c3.id, c1.id, c2.id],
+    );
+
+    assert.equal(db.getSettings().dragLocked, false);
+    assert.equal(db.updateSettings({ dragLocked: true }).dragLocked, true);
+    assert.equal(db.getSettings().dragLocked, true);
+    assert.equal(db.updateSettings({ dragLocked: false }).dragLocked, false);
+  } finally {
+    db.close();
+  }
+});
+
+test('QA: Idempotent creation prevents duplicate categories/todos on rapid double-click', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    const firstCat = db.createCategory({ id: 'same-cat-id', name: 'Hızlı', color: '#dc2626' });
+    const dupCat = db.createCategory({ id: 'same-cat-id', name: 'Hızlı', color: '#dc2626' });
+    assert.equal(firstCat.id, dupCat.id);
+    assert.equal(db.getCategories().length, 1);
+
+    const firstTodo = db.createTodo({ id: 'same-todo-id', title: 'Çift tıklama testi' });
+    const dupTodo = db.createTodo({ id: 'same-todo-id', title: 'Çift tıklama testi' });
+    assert.equal(firstTodo.id, dupTodo.id);
+    assert.equal(db.getTodos().length, 1);
+  } finally {
+    db.close();
+  }
+});
+
+test('QA: Pinning floats categories and todos to the top and persists across settings/reloads', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    const c1 = db.createCategory({ name: 'İlk', color: '#dc2626' });
+    const c2 = db.createCategory({ name: 'İkinci', color: '#2563eb' });
+    const c3 = db.createCategory({ name: 'Üçüncü', color: '#16a34a' });
+
+    // Pin c3 -> jumps to the very top
+    const pinnedC3 = db.updateCategory(c3.id, { pinned: true });
+    assert.equal(pinnedC3?.pinned, true);
+    assert.deepEqual(
+      db.getCategories().map((c) => c.id),
+      [c3.id, c1.id, c2.id],
+    );
+    assert.deepEqual(
+      sortCategoriesWithPin([c1, c2, { ...c3, pinned: true }]).map((c) => c.id),
+      [c3.id, c1.id, c2.id],
+    );
+
+    const t1 = db.createTodo({ title: 'Yüksek öncelikli', priority: 'high' });
+    const t2 = db.createTodo({ title: 'Düşük ama sabitli', priority: 'low' });
+    db.updateTodo(t2.id, { pinned: true });
+
+    const allTodos = db.getTodos();
+    assert.equal(allTodos[0].id, t2.id);
+    assert.equal(allTodos[0].pinned, true);
+
+    // Even when sorted by priority, pinned active tasks stay above unpinned active tasks
+    const sortedByPriority = filterAndSortTodos({
+      todos: allTodos,
+      activeView: { type: 'smart', id: 'all' },
+      statusFilter: 'all',
+      searchQuery: '',
+      sortBy: 'priority',
+      todayStr: '2026-11-19',
+    });
+    assert.equal(sortedByPriority[0].id, t2.id);
+    assert.equal(sortedByPriority[1].id, t1.id);
+
+    // Sidebar minimal mode and theme preference persistence
+    assert.equal(db.getSettings().themeCustomized, false);
+    const updatedSettings = db.updateSettings({
+      themeMode: 'dark',
+      themeId: 'navy',
+      sidebarCollapsed: true,
+    });
+    assert.equal(updatedSettings.themeMode, 'dark');
+    assert.equal(updatedSettings.themeId, 'navy');
+    assert.equal(updatedSettings.sidebarCollapsed, true);
+    assert.equal(updatedSettings.themeCustomized, true);
+  } finally {
+    db.close();
+  }
+});
+
+test('QA: Backend sanitizes invalid color/dueDate, ignores trashed IDs for idempotency, and imports JSON backups atomically', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    // 1. Invalid color falls back safely; invalid dueDate becomes null
+    const badCat = db.createCategory({ name: 'Güvenli', color: 'javascript:alert(1)' });
+    assert.equal(badCat.color, '#2563eb');
+    const badTodo = db.createTodo({
+      title: 'Tarih testi',
+      dueDate: '2026-02-31',
+      categoryId: badCat.id,
+    });
+    assert.equal(badTodo.dueDate, null);
+
+    // 2. Idempotency never returns a soft-deleted record as newly created active record
+    const c = db.createCategory({ id: 'recycle-id', name: 'Silinecek', color: '#dc2626' });
+    db.softDeleteCategory(c.id);
+    const recreated = db.createCategory({ id: 'recycle-id', name: 'Yeni Aktif', color: '#16a34a' });
+    assert.notEqual(recreated.id, 'recycle-id');
+    assert.equal(recreated.deletedAt, null);
+
+    // 3. Export snapshot & atomic importBackup restore
+    const snapshot = db.getBootstrap();
+    const targetDb = new TodoDatabase(':memory:');
+    try {
+      const restored = targetDb.importBackup(snapshot);
+      assert.equal(restored.categories.length, snapshot.categories.length);
+      assert.equal(restored.trashedCategories.length, snapshot.trashedCategories.length);
+      assert.equal(restored.todos.length, snapshot.todos.length);
+      assert.equal(restored.todos[0].title, 'Tarih testi');
+    } finally {
+      targetDb.close();
+    }
+  } finally {
+    db.close();
+  }
+});
+
+test('QA: Audit hardening — ValidationError on bad imports, duplicate-ID subtask safety, trashed subtask guard, dueDate preservation & AGENDAMEA_DATA_DIR', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    // 1. Invalid dueDate in updateTodo preserves existing valid dueDate instead of wiping it
+    const t = db.createTodo({ title: 'Tarih koruma', dueDate: '2026-11-25' });
+    const afterInvalid = db.updateTodo(t.id, { dueDate: '2026-99-99' });
+    assert.equal(afterInvalid?.dueDate, '2026-11-25');
+    const afterClear = db.updateTodo(t.id, { dueDate: null });
+    assert.equal(afterClear?.dueDate, null);
+
+    // 2. Subtasks belonging to a soft-deleted todo cannot be mutated or deleted
+    const sub = db.createSubtask(t.id, 'Alt adım');
+    assert.ok(sub);
+    db.softDeleteTodo(t.id);
+    assert.equal(db.updateSubtask(sub.id, { completed: true }), null);
+    assert.equal(db.deleteSubtask(sub.id), false);
+
+    // 3. Corrupted non-empty backup throws ValidationError without wiping existing DB
+    assert.throws(
+      () =>
+        db.importBackup({
+          todos: [null as unknown as Todo, {} as Todo],
+        }),
+      (err) => err instanceof ValidationError,
+    );
+    assert.equal(db.getTrashedTodos().length, 1);
+
+    // 4. Duplicate todo IDs in backup do not cascade-wipe subtasks and truncate fractional sortOrder
+    const restored = db.importBackup({
+      categories: [],
+      todos: [
+        {
+          id: 'dup-id',
+          title: 'İlk görev',
+          notes: '',
+          completed: false,
+          important: false,
+          pinned: false,
+          priority: 'normal',
+          dueDate: null,
+          categoryId: null,
+          sortOrder: 1.9,
+          createdAt: '2026-11-19T00:00:00.000Z',
+          updatedAt: '2026-11-19T00:00:00.000Z',
+          deletedAt: null,
+          subtasks: [{ id: 's1', todoId: 'dup-id', title: 'Korunan alt görev', completed: false, sortOrder: 0.7 }],
+        },
+        {
+          id: 'dup-id',
+          title: 'İkinci görev (çakışan id)',
+          notes: '',
+          completed: false,
+          important: false,
+          pinned: false,
+          priority: 'normal',
+          dueDate: null,
+          categoryId: null,
+          sortOrder: 2.4,
+          createdAt: '2026-11-19T00:00:00.000Z',
+          updatedAt: '2026-11-19T00:00:00.000Z',
+          deletedAt: null,
+          subtasks: [],
+        },
+      ],
+    });
+    assert.equal(restored.todos.length, 2);
+    const first = restored.todos.find((x) => x.title === 'İlk görev');
+    assert.equal(first?.subtasks.length, 1);
+    assert.equal(first?.sortOrder, 1);
+    assert.equal(first?.subtasks[0].sortOrder, 0);
+  } finally {
+    db.close();
+  }
+
+  // 5. AGENDAMEA_DATA_DIR overrides default DB directory (required for Windows Program Files installs)
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agendamea-appdata-'));
+  const prevEnv = process.env.AGENDAMEA_DATA_DIR;
+  process.env.AGENDAMEA_DATA_DIR = tmpDir;
+  try {
+    const envDb = new TodoDatabase();
+    envDb.createTodo({ title: 'AppData testi' });
+    envDb.close();
+    assert.ok(fs.existsSync(path.join(tmpDir, 'agendamea.db')));
+  } finally {
+    if (prevEnv === undefined) {
+      delete process.env.AGENDAMEA_DATA_DIR;
+    } else {
+      process.env.AGENDAMEA_DATA_DIR = prevEnv;
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('QA: Third-pass audit hardening — drop helper, non-destructive categoryId, import caps & schema v3 partial indexes', () => {
+  // 1. getVerticalDropPosition splits midpoint cleanly
+  const rect = { top: 100, height: 40 } as DOMRect;
+  assert.equal(getVerticalDropPosition(110, rect), 'before');
+  assert.equal(getVerticalDropPosition(120, rect), 'after');
+  assert.equal(getVerticalDropPosition(135, rect), 'after');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agendamea-v3-'));
+  const dbPath = path.join(tmpDir, 'audit-v3.db');
+  const db = new TodoDatabase(dbPath);
+  try {
+    // 2. Invalid/non-active categoryId in updateTodo preserves existing categoryId
+    const cat = db.createCategory({ name: 'Sabit', color: '#2563eb' });
+    const todo = db.createTodo({ title: 'Kategori koruma', categoryId: cat.id });
+    const afterInvalidCat = db.updateTodo(todo.id, { categoryId: 'non-existent-id' });
+    assert.equal(afterInvalidCat?.categoryId, cat.id);
+    const afterExplicitClear = db.updateTodo(todo.id, { categoryId: null });
+    assert.equal(afterExplicitClear?.categoryId, null);
+
+    // 3. importBackup rejects oversized category collections cleanly with ValidationError
+    const tooManyCats = Array.from({ length: 501 }, (_, i) => ({
+      id: `c-${i}`,
+      name: `Cat ${i}`,
+      color: '#2563eb',
+    }));
+    assert.throws(
+      () => db.importBackup({ categories: tooManyCats as Category[] }),
+      (err) => err instanceof ValidationError,
+    );
+
+    // 4. Transactional getBootstrap snapshot returns consistent state
+    const snap = db.getBootstrap();
+    assert.equal(snap.categories.length, 1);
+    assert.equal(snap.todos.length, 1);
+  } finally {
+    db.close();
+  }
+
+  // 5. Schema v3 upgrades cleanly and creates composite partial indexes
+  const raw = new Database(dbPath);
+  try {
+    const version = raw.pragma('user_version', { simple: true });
+    assert.equal(version, 3);
+    const indexes = raw
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+      .all() as Array<{ name: string }>;
+    const names = new Set(indexes.map((i) => i.name));
+    assert.ok(names.has('idx_todos_active_order'));
+    assert.ok(names.has('idx_categories_active_order'));
+  } finally {
+    raw.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('QA: Fourth-pass audit hardening — blank PATCH rejection, reorder caps & subtask import cap', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    const cat = db.createCategory({ name: 'Çalışma', color: '#2563eb' });
+    const todo = db.createTodo({ title: 'Asıl görev', categoryId: cat.id });
+    const sub = db.createSubtask(todo.id, 'Alt adım');
+    assert.ok(sub);
+
+    // 1. Blank PATCH strings throw ValidationError consistently across category, todo, and subtask
+    assert.throws(
+      () => db.updateCategory(cat.id, { name: '   ' }),
+      (err) => err instanceof ValidationError,
+    );
+    assert.throws(
+      () => db.updateTodo(todo.id, { title: '   ' }),
+      (err) => err instanceof ValidationError,
+    );
+    assert.throws(
+      () => db.updateSubtask(sub.id, { title: '' }),
+      (err) => err instanceof ValidationError,
+    );
+
+    // 2. Reorder rejects oversized ID lists and deduplicates safely
+    const tooManyCatIds = Array.from({ length: 501 }, (_, i) => `cat-${i}`);
+    assert.throws(
+      () => db.reorderCategories(tooManyCatIds),
+      (err) => err instanceof ValidationError,
+    );
+    db.reorderCategories([cat.id, cat.id]);
+    assert.equal(db.getCategories()[0].sortOrder, 0);
+
+    // 3. importBackup enforces per-todo subtask cap cleanly with ValidationError
+    const tooManySubs = Array.from({ length: 201 }, (_, i) => ({
+      id: `sub-${i}`,
+      title: `Alt ${i}`,
+      completed: false,
+    }));
+    assert.throws(
+      () =>
+        db.importBackup({
+          todos: [
+            {
+              id: 't-cap',
+              title: 'Taşan alt görevler',
+              subtasks: tooManySubs as unknown as Todo['subtasks'],
+            } as Todo,
+          ],
+        }),
+      (err) => err instanceof ValidationError,
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('QA: Windows 11 Electron installer/uninstaller assets, BMP headers, UTF-8 BOM nsh & Vellium metadata are valid', () => {
+  const root = process.cwd();
+  const resDir = path.join(root, 'electron-resources');
+
+  // 1. Validate 24-bit uncompressed Windows DIB BMP headers & exact NSIS dimensions
+  const expectedBmps: Array<[string, number, number]> = [
+    ['installerSidebar.bmp', 164, 314],
+    ['uninstallerSidebar.bmp', 164, 314],
+    ['installerHeader.bmp', 150, 57],
+  ];
+  for (const [file, width, height] of expectedBmps) {
+    const buf = fs.readFileSync(path.join(resDir, file));
+    assert.equal(buf.subarray(0, 2).toString('ascii'), 'BM', `${file} must have BM magic`);
+    assert.equal(buf.readInt32LE(18), width, `${file} width mismatch`);
+    assert.equal(buf.readInt32LE(22), height, `${file} height mismatch`);
+    assert.equal(buf.readUInt16LE(28), 24, `${file} must be 24-bit BMP for NSIS MUI2`);
+    assert.equal(buf.readUInt32LE(30), 0, `${file} must be uncompressed BI_RGB`);
+  }
+
+  // 2. Validate Windows multi-resolution ICO headers
+  for (const icoFile of ['icon.ico', 'installer.ico', 'uninstaller.ico']) {
+    const buf = fs.readFileSync(path.join(resDir, icoFile));
+    assert.equal(buf.readUInt16LE(0), 0);
+    assert.equal(buf.readUInt16LE(2), 1);
+    assert.ok(buf.readUInt16LE(4) >= 7, `${icoFile} should have at least 7 resolutions`);
+  }
+
+  // 3. Validate UTF-8 BOM NSIS script & Vellium publisher info
+  const nshBuf = fs.readFileSync(path.join(resDir, 'installer.nsh'));
+  assert.equal(nshBuf[0], 0xef);
+  assert.equal(nshBuf[1], 0xbb);
+  assert.equal(nshBuf[2], 0xbf);
+  const nshText = nshBuf.toString('utf8');
+  assert.ok(nshText.includes('Vellium'));
+  assert.ok(nshText.includes('https://vellium.dev'));
+  assert.ok(nshText.includes('support@vellium.dev'));
+
+  // 4. Validate electron-builder.yml & package.json alignment
+  const builderYml = fs.readFileSync(path.join(root, 'electron-builder.yml'), 'utf8');
+  assert.ok(builderYml.includes('appId: dev.vellium.agendamea'));
+  assert.ok(builderYml.includes('publisherName: Vellium'));
+  assert.ok(builderYml.includes('installerSidebar: electron-resources/installerSidebar.bmp'));
+  assert.ok(builderYml.includes('uninstallerSidebar: electron-resources/uninstallerSidebar.bmp'));
+  assert.ok(builderYml.includes('installerHeader: electron-resources/installerHeader.bmp'));
+
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(pkg.main, 'electron/main.cjs');
+  assert.equal(pkg.version, '1.0.0');
+  assert.equal(pkg.author.name, 'Vellium');
+  assert.equal(pkg.author.email, 'support@vellium.dev');
+  assert.equal(pkg.homepage, 'https://vellium.dev');
+});
+
+

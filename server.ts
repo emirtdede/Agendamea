@@ -1,0 +1,631 @@
+import { execFile } from 'node:child_process';
+import http from 'node:http';
+import { fileURLToPath } from 'node:url';
+import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { TodoDatabase, ValidationError } from './src/db/database.ts';
+import { getLocalDateString } from './src/utils/todoLogic.ts';
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isLoopbackAddress(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false;
+  return (
+    remoteAddress === '127.0.0.1' ||
+    remoteAddress === '::1' ||
+    remoteAddress === '::ffff:127.0.0.1'
+  );
+}
+
+function sendRouteError(
+  res: express.Response,
+  routeLabel: string,
+  err: unknown,
+  fallbackMessage: string,
+): void {
+  if (err instanceof ValidationError) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+  console.error(`${routeLabel} error:`, err);
+  res.status(500).json({ error: fallbackMessage });
+}
+
+async function startServer() {
+  const app = express();
+  const httpServer = http.createServer(app);
+  const db = new TodoDatabase();
+  const PORT = Number(process.env.PORT) || 3000;
+  // Bind loopback on Windows desktop by default; 0.0.0.0 in Linux containers unless HOST is set
+  const HOST = process.env.HOST || (process.platform === 'win32' ? '127.0.0.1' : '0.0.0.0');
+
+  app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (!process.env.CSP_HEADER_VALUE) {
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    }
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+  });
+
+  app.use(express.json({ limit: '5mb' }));
+  app.use('/api', (req, res, next) => {
+    if (
+      (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT') &&
+      req.body !== undefined &&
+      !isPlainObject(req.body)
+    ) {
+      res.status(400).json({ error: 'Geçersiz istek gövdesi.' });
+      return;
+    }
+    next();
+  });
+
+  // Lightweight health probe for Electron / Windows launcher startup checks
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  // Bootstrap all active + trashed state and settings in one round-trip
+  app.get('/api/bootstrap', (_req, res) => {
+    try {
+      res.json(db.getBootstrap());
+    } catch (err) {
+      console.error('GET /api/bootstrap error:', err);
+      res.status(500).json({ error: 'Veriler yüklenemedi.' });
+    }
+  });
+
+  // Categories
+  app.post('/api/categories', (req, res) => {
+    try {
+      const { id, name, color, pinned } = req.body ?? {};
+      if (typeof name !== 'string' || !name.trim()) {
+        res.status(400).json({ error: 'Kategori adı gereklidir.' });
+        return;
+      }
+      const created = db.createCategory({
+        id: typeof id === 'string' ? id : undefined,
+        name,
+        color: typeof color === 'string' ? color : undefined,
+        pinned: typeof pinned === 'boolean' ? pinned : undefined,
+      });
+      res.status(201).json(created);
+    } catch (err) {
+      sendRouteError(res, 'POST /api/categories', err, 'Kategori oluşturulamadı.');
+    }
+  });
+
+  app.patch('/api/categories/reorder', (req, res) => {
+    try {
+      const { orderedIds } = req.body ?? {};
+      if (!Array.isArray(orderedIds)) {
+        res.status(400).json({ error: 'Geçersiz kategori sıralama listesi.' });
+        return;
+      }
+      db.reorderCategories(orderedIds.filter((x): x is string => typeof x === 'string'));
+      res.json({ ok: true });
+    } catch (err) {
+      sendRouteError(res, 'PATCH /api/categories/reorder', err, 'Kategori sıralaması kaydedilemedi.');
+    }
+  });
+
+  app.patch('/api/categories/:id', (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const updated = db.updateCategory(req.params.id, {
+        name: typeof body.name === 'string' ? body.name : undefined,
+        color: typeof body.color === 'string' ? body.color : undefined,
+        pinned: typeof body.pinned === 'boolean' ? body.pinned : undefined,
+      });
+      if (!updated) {
+        res.status(404).json({ error: 'Kategori bulunamadı.' });
+        return;
+      }
+      res.json(updated);
+    } catch (err) {
+      sendRouteError(res, 'PATCH /api/categories/:id', err, 'Kategori güncellenemedi.');
+    }
+  });
+
+  // Soft delete category -> moves to trash
+  app.delete('/api/categories/:id', (req, res) => {
+    try {
+      const trashed = db.softDeleteCategory(req.params.id);
+      if (!trashed) {
+        res.status(404).json({ error: 'Kategori bulunamadı.' });
+        return;
+      }
+      res.json(trashed);
+    } catch (err) {
+      console.error('DELETE /api/categories/:id error:', err);
+      res.status(500).json({ error: 'Kategori çöp kutusuna taşınamadı.' });
+    }
+  });
+
+  app.post('/api/categories/:id/restore', (req, res) => {
+    try {
+      const restored = db.restoreCategory(req.params.id);
+      if (!restored) {
+        res.status(404).json({ error: 'Kategori çöp kutusunda bulunamadı.' });
+        return;
+      }
+      res.json(restored);
+    } catch (err) {
+      console.error('POST /api/categories/:id/restore error:', err);
+      res.status(500).json({ error: 'Kategori geri yüklenemedi.' });
+    }
+  });
+
+  app.delete('/api/categories/:id/permanent', (req, res) => {
+    try {
+      const deleted = db.permanentDeleteCategory(req.params.id);
+      if (!deleted) {
+        res.status(404).json({ error: 'Kategori çöp kutusunda bulunamadı.' });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('DELETE /api/categories/:id/permanent error:', err);
+      res.status(500).json({ error: 'Kategori kalıcı olarak silinemedi.' });
+    }
+  });
+
+  // Todos
+  app.post('/api/todos', (req, res) => {
+    try {
+      const body = req.body ?? {};
+      if (typeof body.title !== 'string' || !body.title.trim()) {
+        res.status(400).json({ error: 'Görev başlığı gereklidir.' });
+        return;
+      }
+      const created = db.createTodo({
+        id: typeof body.id === 'string' ? body.id : undefined,
+        title: body.title,
+        notes: typeof body.notes === 'string' ? body.notes : undefined,
+        completed: typeof body.completed === 'boolean' ? body.completed : undefined,
+        important: typeof body.important === 'boolean' ? body.important : undefined,
+        pinned: typeof body.pinned === 'boolean' ? body.pinned : undefined,
+        priority: body.priority,
+        dueDate:
+          body.dueDate === null || typeof body.dueDate === 'string' ? body.dueDate : undefined,
+        categoryId:
+          body.categoryId === null || typeof body.categoryId === 'string'
+            ? body.categoryId
+            : undefined,
+        subtasks: Array.isArray(body.subtasks) ? body.subtasks : undefined,
+      });
+      res.status(201).json(created);
+    } catch (err) {
+      sendRouteError(res, 'POST /api/todos', err, 'Görev eklenemedi.');
+    }
+  });
+
+  app.patch('/api/todos/reorder', (req, res) => {
+    try {
+      const { orderedIds } = req.body ?? {};
+      if (!Array.isArray(orderedIds)) {
+        res.status(400).json({ error: 'Geçersiz sıralama listesi.' });
+        return;
+      }
+      db.reorderTodos(orderedIds.filter((x): x is string => typeof x === 'string'));
+      res.json({ ok: true });
+    } catch (err) {
+      sendRouteError(res, 'PATCH /api/todos/reorder', err, 'Sıralama kaydedilemedi.');
+    }
+  });
+
+  // Soft delete completed todos -> moves to trash
+  app.delete('/api/todos/completed', (req, res) => {
+    try {
+      const categoryId =
+        typeof req.query.categoryId === 'string' && req.query.categoryId.length > 0
+          ? req.query.categoryId
+          : null;
+      const trashedTodos = db.clearCompleted(categoryId);
+      res.json({ ok: true, trashedTodos });
+    } catch (err) {
+      console.error('DELETE /api/todos/completed error:', err);
+      res.status(500).json({ error: 'Tamamlananlar çöp kutusuna taşınamadı.' });
+    }
+  });
+
+  app.patch('/api/todos/:id', (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const updated = db.updateTodo(req.params.id, {
+        title: typeof body.title === 'string' ? body.title : undefined,
+        notes: typeof body.notes === 'string' ? body.notes : undefined,
+        completed: typeof body.completed === 'boolean' ? body.completed : undefined,
+        important: typeof body.important === 'boolean' ? body.important : undefined,
+        pinned: typeof body.pinned === 'boolean' ? body.pinned : undefined,
+        priority: body.priority,
+        dueDate:
+          body.dueDate === null || typeof body.dueDate === 'string' ? body.dueDate : undefined,
+        categoryId:
+          body.categoryId === null || typeof body.categoryId === 'string'
+            ? body.categoryId
+            : undefined,
+      });
+      if (!updated) {
+        res.status(404).json({ error: 'Görev bulunamadı.' });
+        return;
+      }
+      res.json(updated);
+    } catch (err) {
+      sendRouteError(res, 'PATCH /api/todos/:id', err, 'Görev güncellenemedi.');
+    }
+  });
+
+  // Soft delete todo -> moves to trash
+  app.delete('/api/todos/:id', (req, res) => {
+    try {
+      const trashed = db.softDeleteTodo(req.params.id);
+      if (!trashed) {
+        res.status(404).json({ error: 'Görev bulunamadı.' });
+        return;
+      }
+      res.json(trashed);
+    } catch (err) {
+      console.error('DELETE /api/todos/:id error:', err);
+      res.status(500).json({ error: 'Görev çöp kutusuna taşınamadı.' });
+    }
+  });
+
+  app.post('/api/todos/:id/restore', (req, res) => {
+    try {
+      const restored = db.restoreTodo(req.params.id);
+      if (!restored) {
+        res.status(404).json({ error: 'Görev çöp kutusunda bulunamadı.' });
+        return;
+      }
+      res.json(restored);
+    } catch (err) {
+      console.error('POST /api/todos/:id/restore error:', err);
+      res.status(500).json({ error: 'Görev geri yüklenemedi.' });
+    }
+  });
+
+  app.delete('/api/todos/:id/permanent', (req, res) => {
+    try {
+      const deleted = db.permanentDeleteTodo(req.params.id);
+      if (!deleted) {
+        res.status(404).json({ error: 'Görev çöp kutusunda bulunamadı.' });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('DELETE /api/todos/:id/permanent error:', err);
+      res.status(500).json({ error: 'Görev kalıcı olarak silinemedi.' });
+    }
+  });
+
+  // Empty entire trash permanently
+  app.delete('/api/trash', (_req, res) => {
+    try {
+      const result = db.emptyTrash();
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      console.error('DELETE /api/trash error:', err);
+      res.status(500).json({ error: 'Çöp kutusu boşaltılamadı.' });
+    }
+  });
+
+  // Subtasks
+  app.post('/api/todos/:id/subtasks', (req, res) => {
+    try {
+      const { title } = req.body ?? {};
+      if (typeof title !== 'string' || !title.trim()) {
+        res.status(400).json({ error: 'Alt görev başlığı gereklidir.' });
+        return;
+      }
+      const created = db.createSubtask(req.params.id, title);
+      if (!created) {
+        res.status(404).json({ error: 'Üst görev bulunamadı.' });
+        return;
+      }
+      res.status(201).json(created);
+    } catch (err) {
+      sendRouteError(res, 'POST /api/todos/:id/subtasks', err, 'Alt görev eklenemedi.');
+    }
+  });
+
+  app.patch('/api/subtasks/:id', (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const updated = db.updateSubtask(req.params.id, {
+        title: typeof body.title === 'string' ? body.title : undefined,
+        completed: typeof body.completed === 'boolean' ? body.completed : undefined,
+      });
+      if (!updated) {
+        res.status(404).json({ error: 'Alt görev bulunamadı.' });
+        return;
+      }
+      res.json(updated);
+    } catch (err) {
+      sendRouteError(res, 'PATCH /api/subtasks/:id', err, 'Alt görev güncellenemedi.');
+    }
+  });
+
+  app.delete('/api/subtasks/:id', (req, res) => {
+    try {
+      const deleted = db.deleteSubtask(req.params.id);
+      if (!deleted) {
+        res.status(404).json({ error: 'Alt görev bulunamadı.' });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('DELETE /api/subtasks/:id error:', err);
+      res.status(500).json({ error: 'Alt görev silinemedi.' });
+    }
+  });
+
+  // Settings (theme mode, color theme, drag lock & sidebar state persisted to SQLite)
+  app.patch('/api/settings', (req, res) => {
+    try {
+      const updated = db.updateSettings(req.body ?? {});
+      res.json(updated);
+    } catch (err) {
+      sendRouteError(res, 'PATCH /api/settings', err, 'Ayarlar kaydedilemedi.');
+    }
+  });
+
+  // Windows 10/11 native minimize fallback (loopback-only + concurrency guard)
+  let isMinimizing = false;
+  app.post('/api/window/minimize', (req, res) => {
+    if (process.platform !== 'win32') {
+      res.json({ ok: true, supported: false });
+      return;
+    }
+    if (!isLoopbackAddress(req.socket.remoteAddress)) {
+      res.status(403).json({ error: 'Yalnızca yerel erişime izin verilir.' });
+      return;
+    }
+    if (isMinimizing) {
+      res.json({ ok: true, supported: true });
+      return;
+    }
+
+    isMinimizing = true;
+    const psScript =
+      'Add-Type -TypeDefinition "using System; using System.Runtime.InteropServices; public class Win32Min { [DllImport(\\"user32.dll\\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }"; $h = [Win32Min]::GetForegroundWindow(); if ($h -ne [IntPtr]::Zero) { [void][Win32Min]::ShowWindow($h, 6) }';
+
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', psScript],
+      { timeout: 3000 },
+      (err) => {
+        isMinimizing = false;
+        if (err) {
+          res.json({ ok: false, supported: true });
+          return;
+        }
+        res.json({ ok: true, supported: true });
+      },
+    );
+  });
+
+  // JSON Backup Export
+  app.get('/api/export', (_req, res) => {
+    try {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        app: 'Agendamea',
+        ...db.getBootstrap(),
+      };
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="agendamea-yedek-${getLocalDateString()}.json"`,
+      );
+      res.send(JSON.stringify(payload, null, 2));
+    } catch (err) {
+      console.error('GET /api/export error:', err);
+      res.status(500).json({ error: 'Yedek oluşturulamadı.' });
+    }
+  });
+
+  // JSON Backup Import (atomic restore; never leaks internal SQLite errors)
+  app.post('/api/import', (req, res) => {
+    try {
+      const restored = db.importBackup(req.body ?? {});
+      res.json(restored);
+    } catch (err) {
+      sendRouteError(res, 'POST /api/import', err, 'Yedek dosyası içe aktarılamadı.');
+    }
+  });
+
+  // Unknown API routes return clean JSON 404 instead of SPA index.html
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'API uç noktası bulunamadı.' });
+  });
+
+  // Clean JSON error handler (handles malformed JSON, 413 payload limit, and prevents stack trace leaks)
+  app.use(
+    (
+      err: unknown,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      if (err instanceof SyntaxError && 'body' in err) {
+        res.status(400).json({ error: 'Geçersiz JSON formatı.' });
+        return;
+      }
+      const typedErr = err as { type?: string; status?: number };
+      if (typedErr?.type === 'entity.too.large' || typedErr?.status === 413) {
+        res.status(413).json({ error: 'İstek boyutu çok büyük (en fazla 5 MB).' });
+        return;
+      }
+      console.error('Unhandled Express error:', err);
+      res.status(500).json({ error: 'Beklenmeyen bir sunucu hatası oluştu.' });
+    },
+  );
+
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const appRoot = process.env.AGENDAMEA_APP_ROOT
+    ? path.resolve(process.env.AGENDAMEA_APP_ROOT)
+    : fs.existsSync(path.resolve(currentDir, 'dist'))
+      ? currentDir
+      : path.resolve(currentDir, '..');
+  const distDir = path.join(appRoot, 'dist');
+  const isProd = process.env.NODE_ENV === 'production' && fs.existsSync(distDir);
+
+  let viteServer: { close: () => Promise<void> } | null = null;
+
+  if (isProd) {
+    app.use(
+      express.static(distDir, {
+        setHeaders(res, filePath) {
+          if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          } else if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+            res.setHeader('Cache-Control', 'no-cache');
+          } else if (filePath.endsWith('.webmanifest')) {
+            res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+          } else if (filePath.endsWith('browserconfig.xml')) {
+            res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+          }
+        },
+      }),
+    );
+    app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(path.join(distDir, 'index.html'));
+    });
+  } else {
+    // Dynamic import keeps devDependency 'vite' out of production/Electron startup path
+    const { createServer: createViteServer } = await import('vite');
+    const hmrDisabled = process.env.DISABLE_HMR === 'true';
+    const vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        hmr: hmrDisabled ? false : { server: httpServer },
+        ...(hmrDisabled ? { ws: false as const } : {}),
+        watch: hmrDisabled ? null : {},
+      },
+      appType: 'spa',
+    });
+    viteServer = vite;
+
+    if (hmrDisabled) {
+      // Vite 8 injects /@vite/client even when hmr/ws are disabled, causing client-side
+      // WebSocket connection errors behind proxies. Serve a zero-WebSocket shim with the
+      // standard Vite client exports required by CSS/HMR transforms.
+      const noopViteClient = [
+        'const sheetsMap = new Map();',
+        'export function updateStyle(id, content) {',
+        '  let style = sheetsMap.get(id);',
+        '  if (!style) {',
+        '    style = document.createElement("style");',
+        '    style.setAttribute("type", "text/css");',
+        '    style.setAttribute("data-vite-dev-id", id);',
+        '    style.textContent = content;',
+        '    document.head.appendChild(style);',
+        '    sheetsMap.set(id, style);',
+        '  } else if (style.textContent !== content) {',
+        '    style.textContent = content;',
+        '  }',
+        '}',
+        'export function removeStyle(id) {',
+        '  const style = sheetsMap.get(id);',
+        '  if (style) {',
+        '    style.remove();',
+        '    sheetsMap.delete(id);',
+        '  }',
+        '}',
+        'export function createHotContext() {',
+        '  return {',
+        '    data: {},',
+        '    accept() {},',
+        '    acceptExports() {},',
+        '    dispose() {},',
+        '    prune() {},',
+        '    decline() {},',
+        '    invalidate() {},',
+        '    on() {},',
+        '    off() {},',
+        '    send() {},',
+        '  };',
+        '}',
+        'export function injectQuery(url, queryToInject) {',
+        '  if (url[0] !== "." && url[0] !== "/") return url;',
+        '  const pathname = url.replace(/[?#].*$/, "");',
+        '  const { search, hash } = new URL(url, "http://vite.dev");',
+        '  return `${pathname}?${queryToInject}${search ? "&" + search.slice(1) : ""}${hash || ""}`;',
+        '}',
+        'export class ErrorOverlay extends HTMLElement {}',
+      ].join('\n');
+
+      app.get('/@vite/client', (_req, res) => {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.send(noopViteClient);
+      });
+    }
+
+    app.use(vite.middlewares);
+  }
+
+  httpServer.on('error', (err) => {
+    console.error('Agendamea HTTP server error:', err);
+    try {
+      db.close();
+    } catch {
+      // Ignore already-closed handle
+    }
+    process.exit(1);
+  });
+
+  const server = httpServer.listen(PORT, HOST, () => {
+    console.log(`Agendamea server running on http://${HOST}:${PORT}`);
+  });
+
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+
+    const forceExit = setTimeout(() => {
+      try {
+        db.close();
+      } catch {
+        // Ignore already-closed handle
+      }
+      process.exit(0);
+    }, 1500);
+    forceExit.unref();
+
+    server.closeIdleConnections?.();
+    server.close(() => {
+      const finish = () => {
+        clearTimeout(forceExit);
+        try {
+          db.close();
+        } catch {
+          // Ignore already-closed handle
+        }
+        process.exit(0);
+      };
+      if (viteServer) {
+        void viteServer.close().catch(() => {}).finally(finish);
+      } else {
+        finish();
+      }
+    });
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start Agendamea server:', err);
+  process.exit(1);
+});

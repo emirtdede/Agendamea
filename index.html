@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agendamea — Minimalist Görev Yöneticisi</title>
+    <meta name="application-name" content="Agendamea" />
+    <meta name="description" content="Günlük görevlerinizi zahmetsizce planlayın. İnternetsiz çalışan, her değişikliği anında kaydeden, kişisel renk temalarına sahip sade ve hızlı görev yöneticisi." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" />
+
+    <!-- OpenGraph & Social -->
+    <meta property="og:title" content="Agendamea — Minimalist Görev Yöneticisi" />
+    <meta property="og:description" content="Günlük görevlerinizi zahmetsizce planlayın. İnternetsiz çalışan, her değişikliği anında kaydeden, kişisel renk temalarına sahip sade ve hızlı görev yöneticisi." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Agendamea — Minimalist Görev Yöneticisi" />
+    <meta name="twitter:description" content="Günlük görevlerinizi zahmetsizce planlayın. İnternetsiz çalışan, her değişikliği anında kaydeden, kişisel renk temalarına sahip sade ve hızlı görev yöneticisi." />
+    <meta name="twitter:image" content="/og-image.png" />
+
+    <!-- Windows / Microsoft Edge & Start Menu Tiles -->
+    <meta name="msapplication-TileColor" content="#09090b" />
+    <meta name="msapplication-TileImage" content="/icons/mstile-144x144.png" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    <meta name="msapplication-tooltip" content="Agendamea — Yapılacaklar" />
+    <meta name="msapplication-starturl" content="/" />
+
+    <!-- Mobile / PWA / Apple Safari -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Agendamea" />
+
+    <!-- Multi-Resolution & Multi-Format Icons -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#09090b" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+
+    <script>
+      (function () {
+        try {
+          var root = document.documentElement;
+          var mode = localStorage.getItem('agendamea-theme-mode');
+          if (mode === 'dark') {
+            root.classList.add('dark');
+          }
+          var rawTokens = localStorage.getItem('agendamea-theme-tokens');
+          if (rawTokens) {
+            var tokens = JSON.parse(rawTokens);
+            if (tokens && typeof tokens === 'object') {
+              Object.keys(tokens).forEach(function (k) {
+                if (k.indexOf('--') === 0 && typeof tokens[k] === 'string') {
+                  root.style.setProperty(k, tokens[k]);
+                }
+              });
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="antialiased selection:bg-[var(--accent-soft)] selection:text-[var(--text-primary)]">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

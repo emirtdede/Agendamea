@@ -1,0 +1,18 @@
+import { createRoot } from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
+import App from './App.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import './index.css';
+
+const isDesktopShell =
+  typeof window !== 'undefined' && Boolean(window.agendameaWindow);
+
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !isDesktopShell) {
+  registerSW({ immediate: true });
+}
+
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>,
+);
