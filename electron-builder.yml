@@ -40,6 +40,12 @@ win:
     - target: nsis
       arch:
         - x64
+    - target: portable
+      arch:
+        - x64
+
+portable:
+  artifactName: "Agendamea-Portable-${version}-win-${arch}.${ext}"
 
 nsis:
   oneClick: false
