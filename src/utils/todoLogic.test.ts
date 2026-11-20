@@ -871,10 +871,42 @@ test('QA: Windows 11 Electron installer/uninstaller assets, BMP headers, UTF-8 B
   assert.ok(nshText.includes('"DisplayIcon" "$INSTDIR\\${APP_EXECUTABLE_FILENAME},0"'));
   assert.ok(nshText.includes('Shell32::SHChangeNotify'));
 
-  // 4. Validate electron-builder.yml & package.json alignment
+  // 4. Validate electron-builder.yml, Microsoft Store appx assets (zero SampleAppx Electron icon leakage) & package.json alignment
+  const appxDir = path.join(resDir, 'appx');
+  const requiredAppxAssets = [
+    'StoreLogo.png',
+    'StoreLogo.scale-100.png',
+    'StoreLogo.scale-200.png',
+    'Square150x150Logo.png',
+    'Square150x150Logo.scale-100.png',
+    'Square150x150Logo.scale-200.png',
+    'Square44x44Logo.png',
+    'Square44x44Logo.scale-100.png',
+    'Square44x44Logo.targetsize-256.png',
+    'Square44x44Logo.altform-unplated_targetsize-256.png',
+    'Wide310x150Logo.png',
+    'Wide310x150Logo.scale-100.png',
+    'LargeTile.png',
+    'LargeTile.scale-100.png',
+    'SmallTile.png',
+    'SmallTile.scale-100.png',
+    'SplashScreen.png',
+    'SplashScreen.scale-100.png',
+    'BadgeLogo.png',
+    'BadgeLogo.scale-100.png',
+  ];
+  for (const assetName of requiredAppxAssets) {
+    const assetPath = path.join(appxDir, assetName);
+    assert.ok(fs.existsSync(assetPath), `Missing Microsoft Store AppX asset: electron-resources/appx/${assetName}`);
+    assert.ok(fs.statSync(assetPath).size > 100, `Empty AppX asset: ${assetName}`);
+  }
+
   const builderYml = fs.readFileSync(path.join(root, 'electron-builder.yml'), 'utf8');
   assert.ok(builderYml.includes('appId: dev.vellium.agendamea'));
   assert.ok(builderYml.includes('Vellium (vellium.dev)'));
+  assert.ok(builderYml.includes('identityName: Vellium.Agendamea'));
+  assert.ok(builderYml.includes('publisherDisplayName: Vellium'));
+  assert.ok(builderYml.includes('electron-resources/icon.ico'));
   assert.ok(builderYml.includes('installerSidebar: electron-resources/installerSidebar.bmp'));
   assert.ok(builderYml.includes('uninstallerSidebar: electron-resources/uninstallerSidebar.bmp'));
   assert.ok(builderYml.includes('installerHeader: electron-resources/installerHeader.bmp'));

@@ -6,10 +6,16 @@ const ROOT = process.cwd();
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const ICONS_DIR = path.join(PUBLIC_DIR, 'icons');
 const WINDOWS_DIR = path.join(ICONS_DIR, 'windows');
+const APPX_DIR = path.join(ROOT, 'electron-resources', 'appx');
 const LOGOS_DIR = path.join(PUBLIC_DIR, 'logos');
 
-for (const dir of [PUBLIC_DIR, ICONS_DIR, WINDOWS_DIR, LOGOS_DIR]) {
+for (const dir of [PUBLIC_DIR, ICONS_DIR, WINDOWS_DIR, APPX_DIR, LOGOS_DIR]) {
   fs.mkdirSync(dir, { recursive: true });
+}
+
+function writeStoreAsset(fileName, buffer) {
+  fs.writeFileSync(path.join(WINDOWS_DIR, fileName), buffer);
+  fs.writeFileSync(path.join(APPX_DIR, fileName), buffer);
 }
 
 /**
@@ -68,6 +74,17 @@ const maskableIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 const monochromeSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <g transform="translate(-3 5)" fill="none" stroke="#000000" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 116 404 L 248 98 L 300 216" />
+    <path d="M 346 322 L 380 404" />
+    <path d="M 186 294 L 248 354 L 402 184" />
+  </g>
+</svg>
+`;
+
+/** Microsoft Store AppX LockScreen BadgeLogo (monochrome white on transparent) */
+const badgeLogoSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <g transform="translate(-3 5)" fill="none" stroke="#ffffff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round">
     <path d="M 116 404 L 248 98 L 300 216" />
     <path d="M 346 322 L 380 404" />
     <path d="M 186 294 L 248 354 L 402 184" />
@@ -358,28 +375,37 @@ async function main() {
       ['scale-200', 100],
       ['scale-400', 200],
     ]],
+    ['BadgeLogo', [
+      ['scale-100', 24],
+      ['scale-125', 30],
+      ['scale-150', 36],
+      ['scale-200', 48],
+      ['scale-400', 96],
+    ]],
   ];
 
   for (const [prefix, scales] of windowsSquarePacks) {
-    const svg = prefix === 'Square44x44Logo' ? masterIconSvg : maskableIconSvg;
+    const svg =
+      prefix === 'BadgeLogo'
+        ? badgeLogoSvg
+        : prefix === 'Square44x44Logo'
+          ? masterIconSvg
+          : maskableIconSvg;
     for (const [scaleName, size] of scales) {
-      fs.writeFileSync(
-        path.join(WINDOWS_DIR, `${prefix}.${scaleName}.png`),
-        await renderPng(svg, size),
-      );
+      const buf = await renderPng(svg, size);
+      writeStoreAsset(`${prefix}.${scaleName}.png`, buf);
+      if (scaleName === 'scale-100') {
+        // Unqualified base asset prevents electron-builder AppxTarget from falling back to SampleAppx Electron icons
+        writeStoreAsset(`${prefix}.png`, buf);
+      }
     }
   }
 
   // Windows Taskbar / AppList targetsize icons (unplated crisp icons)
   for (const targetSize of [16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256]) {
-    fs.writeFileSync(
-      path.join(WINDOWS_DIR, `Square44x44Logo.targetsize-${targetSize}.png`),
-      await renderPng(masterIconSvg, targetSize),
-    );
-    fs.writeFileSync(
-      path.join(WINDOWS_DIR, `Square44x44Logo.altform-unplated_targetsize-${targetSize}.png`),
-      await renderPng(masterIconSvg, targetSize),
-    );
+    const buf = await renderPng(masterIconSvg, targetSize);
+    writeStoreAsset(`Square44x44Logo.targetsize-${targetSize}.png`, buf);
+    writeStoreAsset(`Square44x44Logo.altform-unplated_targetsize-${targetSize}.png`, buf);
   }
 
   // Windows Wide310x150Logo & SplashScreen
@@ -402,10 +428,11 @@ async function main() {
 
   for (const [prefix, dims] of windowsWidePacks) {
     for (const [scaleName, w, h] of dims) {
-      fs.writeFileSync(
-        path.join(WINDOWS_DIR, `${prefix}.${scaleName}.png`),
-        await renderPng(wideTileSvg(w, h, true), w, h, w),
-      );
+      const buf = await renderPng(wideTileSvg(w, h, true), w, h, w);
+      writeStoreAsset(`${prefix}.${scaleName}.png`, buf);
+      if (scaleName === 'scale-100') {
+        writeStoreAsset(`${prefix}.png`, buf);
+      }
     }
   }
 

@@ -108,7 +108,7 @@ echo.
 echo  =========================================================
 echo   BASARILI! Yeni Windows 11 kurulum dosyasi hazir:
 echo.
-for %%F in ("release\Agendamea-Setup-*.exe") do (
+for %%F in ("release\Agendamea-Setup-*.exe" "release\Agendamea-Portable-*.exe") do (
   echo   ^> %%~fF
 )
 echo  =========================================================

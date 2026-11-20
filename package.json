@@ -28,6 +28,7 @@
     "electron:dev": "electron .",
     "electron:rebuild": "electron-builder install-app-deps",
     "dist:win": "npm run build && electron-builder --win nsis portable --x64",
+    "dist:win:appx": "npm run build && electron-builder --win appx --x64",
     "dist:win:dir": "npm run build && electron-builder --win --x64 --dir",
     "icons:generate": "node scripts/generate-icons.mjs",
     "icons:installer": "node scripts/generate-installer-assets.mjs",

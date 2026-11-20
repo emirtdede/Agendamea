@@ -10,6 +10,7 @@ asar: true
 asarUnpack:
   - "dist/**"
   - "dist-server/**"
+  - "electron-resources/icon.ico"
   - "node_modules/better-sqlite3/**"
   - "node_modules/bindings/**"
   - "node_modules/file-uri-to-path/**"
@@ -18,6 +19,7 @@ files:
   - "dist/**"
   - "dist-server/**"
   - "electron/**"
+  - "electron-resources/icon.ico"
   - "package.json"
   - "!node_modules/**"
   - "node_modules/better-sqlite3/**"
@@ -46,6 +48,18 @@ win:
 
 portable:
   artifactName: "Agendamea-Portable-${version}-win-${arch}.${ext}"
+
+appx:
+  applicationId: Agendamea
+  identityName: Vellium.Agendamea
+  displayName: Agendamea
+  publisherDisplayName: Vellium
+  backgroundColor: "#09090b"
+  showNameOnTiles: false
+  languages:
+    - tr-TR
+    - en-US
+  artifactName: "Agendamea-Store-${version}-win-${arch}.${ext}"
 
 nsis:
   oneClick: false

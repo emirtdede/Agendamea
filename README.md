@@ -42,7 +42,10 @@
 # English Version
 
 <div align="center">
-  <img src="public/logos/agendamea-mark-dark.svg" alt="Agendamea Mark" width="96" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logos/agendamea-mark-dark.svg" />
+    <img src="public/logos/agendamea-mark-light.svg" alt="Agendamea Mark" width="96" />
+  </picture>
   <h3>Agendamea - Fast, Offline-First Windows Task &amp; Daily Planner</h3>
   <p><em>Local-First SQLite Architecture, Instant Persistence, and 14 Dual-Mode Color Themes</em></p>
   <p><strong>Developed &amp; Published by <a href="https://vellium.dev">Vellium</a></strong></p>
@@ -217,7 +220,10 @@ flowchart LR
 # Türkçe Versiyon
 
 <div align="center">
-  <img src="public/logos/agendamea-mark-dark.svg" alt="Agendamea Mark" width="96" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logos/agendamea-mark-dark.svg" />
+    <img src="public/logos/agendamea-mark-light.svg" alt="Agendamea Mark" width="96" />
+  </picture>
   <h3>Agendamea - İnternetsiz Çalışan Sade ve Hızlı Windows Görev Yöneticisi</h3>
   <p><em>Yerel Öncelikli SQLite Mimarisi, Anlık Kayıt ve 14 Çift Modlu Renk Teması</em></p>
   <p><strong>Geliştirici ve Yayıncı: <a href="https://vellium.dev">Vellium</a></strong></p>
