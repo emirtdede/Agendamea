@@ -221,7 +221,7 @@ const ogImageSvg = `<?xml version="1.0" encoding="UTF-8"?>
     font-family="'Segoe UI', 'DM Sans', system-ui, sans-serif"
     font-size="27"
     font-weight="400"
-  >Hızlı, modern ve anlık SQLite destekli görev yöneticisi</text>
+  >Hızlı, modern ve anında kaydeden görev yöneticisi</text>
 </svg>
 `;
 

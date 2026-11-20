@@ -1,6 +1,7 @@
 import React from 'react';
 import { RotateCcw, X } from 'lucide-react';
 import type { InfoToastState, UndoToastState } from '../hooks/useToast';
+import { useI18n } from '../i18n/I18nContext';
 
 interface ToastContainerProps {
   undoToast: UndoToastState | null;
@@ -17,6 +18,8 @@ export const ToastContainer = React.memo(function ToastContainer({
   onClearUndo,
   onClearInfo,
 }: ToastContainerProps) {
+  const { t } = useI18n();
+
   if (infoToast && infoToast.tone === 'error') {
     return (
       <div
@@ -28,7 +31,7 @@ export const ToastContainer = React.memo(function ToastContainer({
         <button
           type="button"
           onClick={onClearInfo}
-          aria-label="Hata bildirimini kapat"
+          aria-label={t.closeMenu}
           className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         >
           <X className="h-3.5 w-3.5" />
@@ -53,12 +56,12 @@ export const ToastContainer = React.memo(function ToastContainer({
           className="inline-flex items-center gap-1.5 font-medium text-[var(--accent)] hover:underline whitespace-nowrap"
         >
           <RotateCcw className="h-3.5 w-3.5" />
-          <span>Geri Al</span>
+          <span>{t.undoButton}</span>
         </button>
         <button
           type="button"
           onClick={onClearUndo}
-          aria-label="Bildirimi kapat"
+          aria-label={t.closeMenu}
           className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         >
           <X className="h-3.5 w-3.5" />
@@ -78,7 +81,7 @@ export const ToastContainer = React.memo(function ToastContainer({
         <button
           type="button"
           onClick={onClearInfo}
-          aria-label="Bilgiyi kapat"
+          aria-label={t.closeMenu}
           className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         >
           <X className="h-3.5 w-3.5" />

@@ -8,6 +8,7 @@ import type {
   SubtaskPatch,
   Todo,
   TodoPatch,
+  UpdateCheckResult,
 } from '../types';
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -125,6 +126,7 @@ export const api = {
     important?: boolean;
     pinned?: boolean;
     priority?: Priority;
+    startDate?: string | null;
     dueDate?: string | null;
     categoryId?: string | null;
     subtasks?: Array<{ title: string; completed?: boolean }>;
@@ -220,5 +222,12 @@ export const api = {
     return request<{ ok: boolean; supported: boolean }>('/api/window/minimize', {
       method: 'POST',
     });
+  },
+
+  async checkForUpdates(): Promise<UpdateCheckResult> {
+    if (typeof window !== 'undefined' && window.agendameaWindow?.checkForUpdates) {
+      return window.agendameaWindow.checkForUpdates();
+    }
+    return request<UpdateCheckResult>('/api/update-check');
   },
 };

@@ -1,13 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getLocalDateString } from '../utils/todoLogic';
 
-const HEADER_DATE_FORMATTER = new Intl.DateTimeFormat('tr-TR', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-});
+const HEADER_FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
 
-export function useTodayDate() {
+function getHeaderDateFormatter(intlLocale = 'tr-TR'): Intl.DateTimeFormat {
+  let fmt = HEADER_FORMATTER_CACHE.get(intlLocale);
+  if (!fmt) {
+    try {
+      fmt = new Intl.DateTimeFormat(intlLocale, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+    } catch {
+      fmt = new Intl.DateTimeFormat('tr-TR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+    }
+    HEADER_FORMATTER_CACHE.set(intlLocale, fmt);
+  }
+  return fmt;
+}
+
+export function useTodayDate(intlLocale = 'tr-TR') {
   const [todayStr, setTodayStr] = useState<string>(() => getLocalDateString());
 
   useEffect(() => {
@@ -55,8 +72,8 @@ export function useTodayDate() {
   const todayFormatted = useMemo(() => {
     const [y, m, d] = todayStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d);
-    return Number.isNaN(dt.getTime()) ? '' : HEADER_DATE_FORMATTER.format(dt);
-  }, [todayStr]);
+    return Number.isNaN(dt.getTime()) ? '' : getHeaderDateFormatter(intlLocale).format(dt);
+  }, [todayStr, intlLocale]);
 
   return { todayStr, todayFormatted };
 }

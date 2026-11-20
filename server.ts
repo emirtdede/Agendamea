@@ -5,7 +5,11 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { TodoDatabase, ValidationError } from './src/db/database.ts';
-import { getLocalDateString } from './src/utils/todoLogic.ts';
+import { compareSemver, getLocalDateString } from './src/utils/todoLogic.ts';
+
+const APP_VERSION = '1.0.0';
+const GITHUB_RELEASES_API = 'https://api.github.com/repos/emirtdede/Agendamea/releases/latest';
+const GITHUB_RELEASES_HTML = 'https://github.com/emirtdede/Agendamea/releases/latest';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -253,6 +257,10 @@ async function startServer() {
         important: typeof body.important === 'boolean' ? body.important : undefined,
         pinned: typeof body.pinned === 'boolean' ? body.pinned : undefined,
         priority: body.priority,
+        startDate:
+          body.startDate === null || typeof body.startDate === 'string'
+            ? body.startDate
+            : undefined,
         dueDate:
           body.dueDate === null || typeof body.dueDate === 'string' ? body.dueDate : undefined,
         categoryId:
@@ -306,6 +314,10 @@ async function startServer() {
         important: typeof body.important === 'boolean' ? body.important : undefined,
         pinned: typeof body.pinned === 'boolean' ? body.pinned : undefined,
         priority: body.priority,
+        startDate:
+          body.startDate === null || typeof body.startDate === 'string'
+            ? body.startDate
+            : undefined,
         dueDate:
           body.dueDate === null || typeof body.dueDate === 'string' ? body.dueDate : undefined,
         categoryId:
@@ -427,13 +439,98 @@ async function startServer() {
     }
   });
 
-  // Settings (theme mode, color theme, drag lock & sidebar state persisted to SQLite)
+  // Settings (theme mode, color theme, drag lock, sidebar, language & autoUpdateCheck persisted to SQLite)
   app.patch('/api/settings', (req, res) => {
     try {
       const updated = db.updateSettings(req.body ?? {});
       res.json(updated);
     } catch (err) {
       sendRouteError(res, 'PATCH /api/settings', err, 'Ayarlar kaydedilemedi.');
+    }
+  });
+
+  // Version & Update Check (manual and automatic background check via GitHub Releases)
+  app.get('/api/update-check', async (_req, res) => {
+    const checkedAt = new Date().toISOString();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(GITHUB_RELEASES_API, {
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': `Agendamea/${APP_VERSION} (Vellium)`,
+        },
+      });
+      if (!response.ok) {
+        res.json({
+          ok: false,
+          currentVersion: APP_VERSION,
+          latestVersion: APP_VERSION,
+          updateAvailable: false,
+          releaseName: `Agendamea v${APP_VERSION}`,
+          releaseNotes: '',
+          publishedAt: null,
+          releaseUrl: GITHUB_RELEASES_HTML,
+          setupUrl: null,
+          portableUrl: null,
+          checkedAt,
+        });
+        return;
+      }
+      const data = (await response.json()) as {
+        tag_name?: string;
+        name?: string;
+        body?: string;
+        published_at?: string;
+        html_url?: string;
+        assets?: Array<{ name?: string; browser_download_url?: string }>;
+      };
+      const latestVersion = String(data.tag_name ?? APP_VERSION).replace(/^v/i, '') || APP_VERSION;
+      const updateAvailable = compareSemver(latestVersion, APP_VERSION) > 0;
+      const assets = Array.isArray(data.assets) ? data.assets : [];
+      const setupAsset = assets.find(
+        (a) => typeof a?.name === 'string' && /^Agendamea-Setup-.*\.exe$/i.test(a.name),
+      );
+      const portableAsset = assets.find(
+        (a) => typeof a?.name === 'string' && /^Agendamea-Portable-.*\.exe$/i.test(a.name),
+      );
+      res.json({
+        ok: true,
+        currentVersion: APP_VERSION,
+        latestVersion,
+        updateAvailable,
+        releaseName: typeof data.name === 'string' && data.name ? data.name : `Agendamea v${latestVersion}`,
+        releaseNotes: typeof data.body === 'string' ? data.body.slice(0, 4000) : '',
+        publishedAt: typeof data.published_at === 'string' ? data.published_at : null,
+        releaseUrl:
+          typeof data.html_url === 'string' && data.html_url ? data.html_url : GITHUB_RELEASES_HTML,
+        setupUrl:
+          typeof setupAsset?.browser_download_url === 'string'
+            ? setupAsset.browser_download_url
+            : null,
+        portableUrl:
+          typeof portableAsset?.browser_download_url === 'string'
+            ? portableAsset.browser_download_url
+            : null,
+        checkedAt,
+      });
+    } catch {
+      res.json({
+        ok: false,
+        currentVersion: APP_VERSION,
+        latestVersion: APP_VERSION,
+        updateAvailable: false,
+        releaseName: `Agendamea v${APP_VERSION}`,
+        releaseNotes: '',
+        publishedAt: null,
+        releaseUrl: GITHUB_RELEASES_HTML,
+        setupUrl: null,
+        portableUrl: null,
+        checkedAt,
+      });
+    } finally {
+      clearTimeout(timer);
     }
   });
 

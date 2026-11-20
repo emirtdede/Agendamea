@@ -16,11 +16,20 @@ const PRIORITY_WEIGHT: Record<Priority, number> = {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Cached singleton formatter to avoid expensive Intl instantiation on every render
-const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat('tr-TR', {
-  day: 'numeric',
-  month: 'short',
-});
+const FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
+
+function getShortDateFormatter(locale = 'tr-TR'): Intl.DateTimeFormat {
+  let fmt = FORMATTER_CACHE.get(locale);
+  if (!fmt) {
+    try {
+      fmt = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' });
+    } catch {
+      fmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' });
+    }
+    FORMATTER_CACHE.set(locale, fmt);
+  }
+  return fmt;
+}
 
 export function isValidIsoDateString(value: string): boolean {
   if (!ISO_DATE_RE.test(value)) return false;
@@ -32,6 +41,25 @@ export function isValidIsoDateString(value: string): boolean {
     dt.getMonth() === m - 1 &&
     dt.getDate() === d
   );
+}
+
+export function normalizeDateRange(
+  startDate: string | null | undefined,
+  dueDate: string | null | undefined,
+): { startDate: string | null; dueDate: string | null } {
+  const validStart =
+    typeof startDate === 'string' && isValidIsoDateString(startDate.trim())
+      ? startDate.trim()
+      : null;
+  const validDue =
+    typeof dueDate === 'string' && isValidIsoDateString(dueDate.trim())
+      ? dueDate.trim()
+      : null;
+
+  if (validStart && validDue && validStart > validDue) {
+    return { startDate: validDue, dueDate: validStart };
+  }
+  return { startDate: validStart, dueDate: validDue };
 }
 
 export function getLocalDateString(date: Date = new Date()): string {
@@ -70,21 +98,35 @@ function getRelativeDayBounds(todayStr: string): {
   };
 }
 
+export interface RelativeDateLabels {
+  today: string;
+  tomorrow: string;
+  yesterday: string;
+}
+
+const DEFAULT_TR_DATE_LABELS: RelativeDateLabels = {
+  today: 'Bugün',
+  tomorrow: 'Yarın',
+  yesterday: 'Dün',
+};
+
 export function formatDueDateLabel(
-  dueDate: string | null,
+  dueDate: string | null | undefined,
   todayStr: string = getLocalDateString(),
+  locale = 'tr-TR',
+  labels: RelativeDateLabels = DEFAULT_TR_DATE_LABELS,
 ): { label: string; isOverdue: boolean; isToday: boolean } | null {
   if (!dueDate || !isValidIsoDateString(dueDate)) return null;
   const { tomorrowStr, yesterdayStr } = getRelativeDayBounds(todayStr);
 
   if (dueDate === todayStr) {
-    return { label: 'Bugün', isOverdue: false, isToday: true };
+    return { label: labels.today, isOverdue: false, isToday: true };
   }
   if (dueDate === tomorrowStr) {
-    return { label: 'Yarın', isOverdue: false, isToday: false };
+    return { label: labels.tomorrow, isOverdue: false, isToday: false };
   }
   if (dueDate === yesterdayStr) {
-    return { label: 'Dün', isOverdue: true, isToday: false };
+    return { label: labels.yesterday, isOverdue: true, isToday: false };
   }
 
   const [y, m, d] = dueDate.split('-').map(Number);
@@ -92,10 +134,66 @@ export function formatDueDateLabel(
   if (Number.isNaN(dt.getTime())) return null;
 
   return {
-    label: SHORT_DATE_FORMATTER.format(dt),
+    label: getShortDateFormatter(locale).format(dt),
     isOverdue: dueDate < todayStr,
     isToday: false,
   };
+}
+
+export function formatTodoDateSchedule(
+  startDate: string | null | undefined,
+  dueDate: string | null | undefined,
+  todayStr: string = getLocalDateString(),
+  locale = 'tr-TR',
+  labels: RelativeDateLabels = DEFAULT_TR_DATE_LABELS,
+): { label: string; isOverdue: boolean; isToday: boolean; isRange: boolean } | null {
+  const { startDate: normStart, dueDate: normDue } = normalizeDateRange(startDate, dueDate);
+
+  if (!normStart && !normDue) return null;
+
+  if (!normStart && normDue) {
+    const dueInfo = formatDueDateLabel(normDue, todayStr, locale, labels);
+    return dueInfo ? { ...dueInfo, isRange: false } : null;
+  }
+
+  if (normStart && !normDue) {
+    const startInfo = formatDueDateLabel(normStart, todayStr, locale, labels);
+    if (!startInfo) return null;
+    return {
+      label: startInfo.label,
+      isOverdue: false,
+      isToday: normStart <= todayStr,
+      isRange: false,
+    };
+  }
+
+  // Both startDate and dueDate present
+  if (normStart === normDue) {
+    const singleInfo = formatDueDateLabel(normDue, todayStr, locale, labels);
+    return singleInfo ? { ...singleInfo, isRange: false } : null;
+  }
+
+  const startInfo = formatDueDateLabel(normStart, todayStr, locale, labels);
+  const dueInfo = formatDueDateLabel(normDue, todayStr, locale, labels);
+  if (!startInfo || !dueInfo) return null;
+
+  return {
+    label: `${startInfo.label} - ${dueInfo.label}`,
+    isOverdue: dueInfo.isOverdue,
+    isToday: (normStart! <= todayStr && todayStr <= normDue!) || dueInfo.isToday,
+    isRange: true,
+  };
+}
+
+export function isTodoScheduledForToday(todo: Pick<Todo, 'startDate' | 'dueDate'>, todayStr: string): boolean {
+  const { startDate, dueDate } = normalizeDateRange(todo.startDate, todo.dueDate);
+  if (dueDate !== null && dueDate <= todayStr) {
+    return true;
+  }
+  if (startDate !== null && startDate <= todayStr && (dueDate === null || dueDate >= todayStr)) {
+    return true;
+  }
+  return false;
 }
 
 export function getPriorityLabel(priority: Priority): string {
@@ -136,8 +234,7 @@ export function filterAndSortTodos(params: {
     // View scoping
     if (activeView.type === 'smart') {
       if (activeView.id === 'today') {
-        const dueForToday = todo.dueDate !== null && todo.dueDate <= todayStr;
-        if (!dueForToday) return false;
+        if (!isTodoScheduledForToday(todo, todayStr)) return false;
       } else if (activeView.id === 'important') {
         if (!todo.important) return false;
       } else if (activeView.id === 'completed') {
@@ -179,11 +276,13 @@ export function filterAndSortTodos(params: {
       const diff = PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority];
       if (diff !== 0) return diff;
     } else if (sortBy === 'dueDate') {
-      if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) {
-        return a.dueDate.localeCompare(b.dueDate);
+      const dateA = a.dueDate ?? a.startDate ?? null;
+      const dateB = b.dueDate ?? b.startDate ?? null;
+      if (dateA && dateB && dateA !== dateB) {
+        return dateA.localeCompare(dateB);
       }
-      if (a.dueDate && !b.dueDate) return -1;
-      if (!a.dueDate && b.dueDate) return 1;
+      if (dateA && !dateB) return -1;
+      if (!dateA && dateB) return 1;
     } else if (sortBy === 'newest') {
       const diff = b.createdAt.localeCompare(a.createdAt);
       if (diff !== 0) return diff;
@@ -222,7 +321,7 @@ export function computeViewCounts(
       smart.completed += 1;
     } else {
       smart.all += 1;
-      if (todo.dueDate !== null && todo.dueDate <= todayStr) {
+      if (isTodoScheduledForToday(todo, todayStr)) {
         smart.today += 1;
       }
       if (todo.important) {
@@ -272,4 +371,19 @@ export function getVerticalDropPosition(
   rect: DOMRect,
 ): 'before' | 'after' {
   return clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+}
+
+export function compareSemver(a: string, b: string): number {
+  const cleanA = a.trim().replace(/^v/i, '').split('-')[0];
+  const cleanB = b.trim().replace(/^v/i, '').split('-')[0];
+  const partsA = cleanA.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const partsB = cleanB.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const len = Math.max(partsA.length, partsB.length, 3);
+  for (let i = 0; i < len; i += 1) {
+    const va = partsA[i] ?? 0;
+    const vb = partsB[i] ?? 0;
+    if (va > vb) return 1;
+    if (va < vb) return -1;
+  }
+  return 0;
 }

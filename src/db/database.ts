@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { isValidLanguageCode, type LanguageCode } from '../i18n/languages.ts';
 import type {
   AppSettings,
   BootstrapPayload,
@@ -14,7 +15,7 @@ import type {
   TodoPatch,
 } from '../types.ts';
 import { isValidThemeId, normalizeHexColor } from '../utils/themes.ts';
-import { isValidIsoDateString } from '../utils/todoLogic.ts';
+import { isValidIsoDateString, normalizeDateRange } from '../utils/todoLogic.ts';
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -41,6 +42,7 @@ interface TodoRow {
   important: number;
   pinned: number;
   priority: Priority;
+  start_date?: string | null;
   due_date: string | null;
   category_id: string | null;
   sort_order: number;
@@ -153,6 +155,7 @@ export class TodoDatabase {
         important INTEGER NOT NULL DEFAULT 0,
         pinned INTEGER NOT NULL DEFAULT 0,
         priority TEXT NOT NULL DEFAULT 'normal',
+        start_date TEXT DEFAULT NULL,
         due_date TEXT,
         category_id TEXT,
         sort_order INTEGER NOT NULL DEFAULT 0,
@@ -211,6 +214,12 @@ export class TodoDatabase {
       `);
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`);
     }
+
+    // Ensure optional start_date column exists on todos across all schema versions
+    const latestTodoCols = this.db.pragma('table_info(todos)') as TableInfoRow[];
+    if (!latestTodoCols.some((c) => c.name === 'start_date')) {
+      this.db.exec('ALTER TABLE todos ADD COLUMN start_date TEXT DEFAULT NULL');
+    }
   }
 
   private ensureDefaultSettings(): void {
@@ -223,6 +232,8 @@ export class TodoDatabase {
       stmt.run('dragLocked', '0');
       stmt.run('sidebarCollapsed', '0');
       stmt.run('themeCustomized', '0');
+      stmt.run('language', 'tr');
+      stmt.run('autoUpdateCheck', '1');
     });
     tx();
   }
@@ -258,6 +269,7 @@ export class TodoDatabase {
       important: Boolean(row.important),
       pinned: Boolean(row.pinned),
       priority: row.priority,
+      startDate: row.start_date ?? null,
       dueDate: row.due_date,
       categoryId: row.category_id,
       sortOrder: row.sort_order,
@@ -298,8 +310,16 @@ export class TodoDatabase {
 
   getSettings(): AppSettings {
     const rows = this.db
-      .prepare('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?)')
-      .all('themeMode', 'themeId', 'dragLocked', 'sidebarCollapsed', 'themeCustomized') as SettingRow[];
+      .prepare('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?, ?)')
+      .all(
+        'themeMode',
+        'themeId',
+        'dragLocked',
+        'sidebarCollapsed',
+        'themeCustomized',
+        'language',
+        'autoUpdateCheck',
+      ) as SettingRow[];
 
     const map = new Map(rows.map((r) => [r.key, r.value]));
     const rawMode = map.get('themeMode');
@@ -307,6 +327,8 @@ export class TodoDatabase {
     const rawDragLocked = map.get('dragLocked');
     const rawSidebarCollapsed = map.get('sidebarCollapsed');
     const rawThemeCustomized = map.get('themeCustomized');
+    const rawLanguage = map.get('language');
+    const rawAutoUpdate = map.get('autoUpdateCheck');
 
     return {
       themeMode: rawMode === 'dark' ? 'dark' : 'light',
@@ -314,6 +336,8 @@ export class TodoDatabase {
       dragLocked: rawDragLocked === '1' || rawDragLocked === 'true',
       sidebarCollapsed: rawSidebarCollapsed === '1' || rawSidebarCollapsed === 'true',
       themeCustomized: rawThemeCustomized === '1' || rawThemeCustomized === 'true',
+      language: isValidLanguageCode(rawLanguage) ? (rawLanguage as LanguageCode) : 'tr',
+      autoUpdateCheck: rawAutoUpdate === undefined ? true : rawAutoUpdate === '1' || rawAutoUpdate === 'true',
     };
   }
 
@@ -334,6 +358,12 @@ export class TodoDatabase {
     }
     if (typeof patch.sidebarCollapsed === 'boolean') {
       stmt.run('sidebarCollapsed', patch.sidebarCollapsed ? '1' : '0');
+    }
+    if (patch.language && isValidLanguageCode(patch.language)) {
+      stmt.run('language', patch.language);
+    }
+    if (typeof patch.autoUpdateCheck === 'boolean') {
+      stmt.run('autoUpdateCheck', patch.autoUpdateCheck ? '1' : '0');
     }
   }
 
@@ -550,6 +580,7 @@ export class TodoDatabase {
     important?: boolean;
     pinned?: boolean;
     priority?: Priority;
+    startDate?: string | null;
     dueDate?: string | null;
     categoryId?: string | null;
     subtasks?: Array<{ title: string; completed?: boolean }>;
@@ -569,7 +600,10 @@ export class TodoDatabase {
     const important = input.important ? 1 : 0;
     const pinned = input.pinned ? 1 : 0;
     const priority = sanitizePriority(input.priority, 'normal');
-    const dueDate = sanitizeDueDate(input.dueDate);
+    const { startDate, dueDate } = normalizeDateRange(
+      sanitizeDueDate(input.startDate),
+      sanitizeDueDate(input.dueDate),
+    );
     const rawCategoryId =
       typeof input.categoryId === 'string' && input.categoryId.trim() ? input.categoryId.trim() : null;
     const subtasksInput = Array.isArray(input.subtasks)
@@ -607,8 +641,8 @@ export class TodoDatabase {
       this.db
         .prepare(`
           INSERT INTO todos (
-            id, title, notes, completed, important, pinned, priority, due_date, category_id, sort_order, created_at, updated_at, deleted_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            id, title, notes, completed, important, pinned, priority, start_date, due_date, category_id, sort_order, created_at, updated_at, deleted_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         `)
         .run(
           id,
@@ -618,6 +652,7 @@ export class TodoDatabase {
           important,
           pinned,
           priority,
+          startDate,
           dueDate,
           categoryId,
           sortOrder,
@@ -672,6 +707,18 @@ export class TodoDatabase {
         typeof patch.pinned === 'boolean' ? (patch.pinned ? 1 : 0) : existing.pinned;
       const priority = sanitizePriority(patch.priority, existing.priority);
 
+      let startDate = existing.start_date ?? null;
+      if (patch.startDate !== undefined) {
+        if (patch.startDate === null || patch.startDate === '') {
+          startDate = null;
+        } else {
+          const sanitizedStart = sanitizeDueDate(patch.startDate);
+          if (sanitizedStart !== null) {
+            startDate = sanitizedStart;
+          }
+        }
+      }
+
       let dueDate = existing.due_date;
       if (patch.dueDate !== undefined) {
         if (patch.dueDate === null || patch.dueDate === '') {
@@ -683,6 +730,10 @@ export class TodoDatabase {
           }
         }
       }
+
+      const normalizedDates = normalizeDateRange(startDate, dueDate);
+      startDate = normalizedDates.startDate;
+      dueDate = normalizedDates.dueDate;
 
       let categoryId = existing.category_id;
       if (patch.categoryId !== undefined) {
@@ -703,7 +754,7 @@ export class TodoDatabase {
       this.db
         .prepare(`
           UPDATE todos
-          SET title = ?, notes = ?, completed = ?, important = ?, pinned = ?, priority = ?, due_date = ?, category_id = ?, updated_at = ?
+          SET title = ?, notes = ?, completed = ?, important = ?, pinned = ?, priority = ?, start_date = ?, due_date = ?, category_id = ?, updated_at = ?
           WHERE id = ?
         `)
         .run(
@@ -713,6 +764,7 @@ export class TodoDatabase {
           important,
           pinned,
           priority,
+          startDate,
           dueDate,
           categoryId,
           updatedAt,
@@ -1024,6 +1076,7 @@ export class TodoDatabase {
       important: number;
       pinned: number;
       priority: Priority;
+      startDate: string | null;
       dueDate: string | null;
       categoryId: string | null;
       sortOrder: number;
@@ -1090,6 +1143,10 @@ export class TodoDatabase {
         });
       }
 
+      const normDates = normalizeDateRange(
+        sanitizeDueDate(item.startDate),
+        sanitizeDueDate(item.dueDate),
+      );
       preparedTodos.push({
         id,
         title,
@@ -1098,7 +1155,8 @@ export class TodoDatabase {
         important: item.important ? 1 : 0,
         pinned: item.pinned ? 1 : 0,
         priority: sanitizePriority(item.priority, 'normal'),
-        dueDate: sanitizeDueDate(item.dueDate),
+        startDate: normDates.startDate,
+        dueDate: normDates.dueDate,
         categoryId,
         sortOrder:
           typeof item.sortOrder === 'number' && Number.isFinite(item.sortOrder)
@@ -1131,8 +1189,8 @@ export class TodoDatabase {
 
       const todoInsert = this.db.prepare(`
         INSERT INTO todos (
-          id, title, notes, completed, important, pinned, priority, due_date, category_id, sort_order, created_at, updated_at, deleted_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, title, notes, completed, important, pinned, priority, start_date, due_date, category_id, sort_order, created_at, updated_at, deleted_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const subInsert = this.db.prepare(
         'INSERT INTO subtasks (id, todo_id, title, completed, sort_order) VALUES (?, ?, ?, ?, ?)',
@@ -1147,6 +1205,7 @@ export class TodoDatabase {
           t.important,
           t.pinned,
           t.priority,
+          t.startDate,
           t.dueDate,
           t.categoryId,
           t.sortOrder,

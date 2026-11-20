@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, Check, Pin, Plus, Star, Trash2, X } from 'lucide-react';
+import { useI18n } from '../i18n/I18nContext';
 import type { Category, Priority, Todo, TodoPatch } from '../types';
 import { addDaysToDateString } from '../utils/todoLogic';
 
@@ -19,24 +20,16 @@ interface TodoDetailPanelProps {
   onDeleteSubtask: (todoId: string, subtaskId: string) => Promise<void>;
 }
 
-const PRIORITIES: Array<{ value: Priority; label: string }> = [
-  { value: 'low', label: 'Düşük' },
-  { value: 'normal', label: 'Normal' },
-  { value: 'high', label: 'Yüksek' },
-];
-
-const DETAIL_DATE_FORMATTER = new Intl.DateTimeFormat('tr-TR', {
-  day: 'numeric',
-  month: 'long',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-function formatCreatedAt(iso: string): string {
+function formatCreatedAt(iso: string, intlLocale: string): string {
   try {
     const dt = new Date(iso);
     if (Number.isNaN(dt.getTime())) return '';
-    return DETAIL_DATE_FORMATTER.format(dt);
+    return new Intl.DateTimeFormat(intlLocale, {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(dt);
   } catch {
     return '';
   }
@@ -53,6 +46,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
   onToggleSubtask,
   onDeleteSubtask,
 }: TodoDetailPanelProps) {
+  const { t, meta } = useI18n();
   const [title, setTitle] = useState(todo.title);
   const [notes, setNotes] = useState(todo.notes);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -98,7 +92,6 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
     void onUpdateRef.current(targetId, patch, keepalive ? { keepalive: true } : undefined).then(
       (ok) => {
         if (!ok) {
-          // Revert optimistic snapshot so the user can retry saving the same content
           if (lastSavedRef.current === nextSaved) {
             lastSavedRef.current = prevSaved;
           }
@@ -111,7 +104,6 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
     );
   };
 
-  // Flush pending edits when switching todos, and resync if server rolls back/updates the active todo
   useEffect(() => {
     if (lastSavedRef.current.id !== todo.id) {
       if (timerRef.current) {
@@ -133,7 +125,6 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
       return;
     }
 
-    // If there is no pending user edit timer, reflect external/rollback updates cleanly
     if (timerRef.current === null) {
       if (todo.title !== lastSavedRef.current.title) {
         setTitle(todo.title);
@@ -160,7 +151,6 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
     }, 320);
   };
 
-  // Flush pending edits on tab close/reload (with keepalive) and on unmount unless actively deleting
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (skipUnmountFlushRef.current) return;
@@ -218,11 +208,22 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
   };
 
   const tomorrowStr = useMemo(() => addDaysToDateString(todayStr, 1), [todayStr]);
-  const createdFormatted = useMemo(() => formatCreatedAt(todo.createdAt), [todo.createdAt]);
+  const createdFormatted = useMemo(
+    () => formatCreatedAt(todo.createdAt, meta.intlLocale),
+    [todo.createdAt, meta.intlLocale],
+  );
+
+  const priorities: Array<{ value: Priority; label: string }> = [
+    { value: 'low', label: t.priorityLow },
+    { value: 'normal', label: t.priorityNormal },
+    { value: 'high', label: t.priorityHigh },
+  ];
+
+  const hasAnyDate = Boolean(todo.startDate || todo.dueDate);
 
   return (
     <aside
-      aria-label="Görev detayları"
+      aria-label={todo.title}
       className="fixed inset-y-0 right-0 z-30 flex w-full max-w-[380px] flex-col border-l border-[var(--border)] bg-[var(--surface)] lg:relative lg:z-auto lg:w-[368px] shrink-0"
     >
       {/* Top frameless drag clearance (stops before top-right WindowControls) */}
@@ -231,7 +232,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
         className="app-drag-region absolute left-0 right-36 top-0 z-10 h-9 select-none"
       />
 
-      {/* Top Bar with clean clearance below floating minimal top-right WindowControls */}
+      {/* Top Bar */}
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 pt-11 pb-3">
         <div className="flex items-center gap-1.5">
           <button
@@ -254,15 +255,15 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
             >
               {todo.completed && <Check className="h-2.5 w-2.5 stroke-[3]" />}
             </span>
-            <span>{todo.completed ? 'Tamamlandı' : 'Tamamla'}</span>
+            <span>{todo.completed ? t.markCompletedDone : t.markComplete}</span>
           </button>
 
           <button
             type="button"
             onClick={() => void onUpdate(todo.id, { pinned: !todo.pinned })}
-            aria-label={todo.pinned ? 'Sabitlemeyi kaldır' : 'Görevi sabitle'}
+            aria-label={todo.pinned ? t.unpinLabel : t.pinLabel}
             aria-pressed={todo.pinned}
-            title={todo.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'}
+            title={todo.pinned ? t.unpinLabel : t.pinLabel}
             className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
               todo.pinned
                 ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
@@ -275,9 +276,9 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
           <button
             type="button"
             onClick={() => void onUpdate(todo.id, { important: !todo.important })}
-            aria-label={todo.important ? 'Önemli işaretini kaldır' : 'Önemli olarak işaretle'}
+            aria-label={t.important}
             aria-pressed={todo.important}
-            title={todo.important ? 'Önemli işaretini kaldır' : 'Önemli'}
+            title={t.important}
             className={`flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] transition-colors ${
               todo.important
                 ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
@@ -298,7 +299,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
             flushChangesFor(todo.id, title, notes);
             onClose();
           }}
-          aria-label="Detay panelini kapat"
+          aria-label={t.closeMenu}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
         >
           <X className="h-4 w-4" />
@@ -319,8 +320,8 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
             }}
             onBlur={() => flushChangesFor(todo.id, title, notes)}
             maxLength={300}
-            aria-label="Görev başlığı"
-            placeholder="Görev başlığı..."
+            aria-label={t.taskTitlePlaceholder}
+            placeholder={t.taskTitlePlaceholder}
             className={`w-full bg-transparent font-display text-lg font-semibold leading-snug text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none ${
               todo.completed ? 'line-through text-[var(--text-muted)]' : ''
             }`}
@@ -336,17 +337,17 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
             onBlur={() => flushChangesFor(todo.id, title, notes)}
             rows={4}
             maxLength={10000}
-            aria-label="Görev notları"
-            placeholder="Notlar veya ayrıntılar ekleyin (otomatik kaydedilir)..."
+            aria-label={t.notesPlaceholder}
+            placeholder={t.notesPlaceholder}
             className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-3 py-2.5 text-sm leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:border-[var(--border-strong)] focus:outline-none"
           />
         </div>
 
         {/* Subtasks */}
-        <section aria-label="Alt görevler" className="space-y-2.5">
+        <section aria-label={t.subtasksTitle} className="space-y-2.5">
           <div className="flex items-center justify-between">
             <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
-              Alt Görevler
+              {t.subtasksTitle}
             </h3>
             {todo.subtasks.length > 0 && (
               <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
@@ -364,11 +365,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
                 <button
                   type="button"
                   onClick={() => void onToggleSubtask(todo.id, sub.id, !sub.completed)}
-                  aria-label={
-                    sub.completed
-                      ? `Alt görev işaretini kaldır: ${sub.title}`
-                      : `Alt görevi tamamla: ${sub.title}`
-                  }
+                  aria-label={sub.title}
                   className="flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors"
                   style={
                     sub.completed
@@ -394,7 +391,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
                 <button
                   type="button"
                   onClick={() => void onDeleteSubtask(todo.id, sub.id)}
-                  aria-label={`Alt görevi sil: ${sub.title}`}
+                  aria-label={`${t.deleteToTrashButton}: ${sub.title}`}
                   className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 text-[var(--text-muted)] hover:text-red-500 p-1 rounded transition-opacity"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -410,14 +407,14 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
               onChange={(e) => setNewSubtaskTitle(e.target.value)}
               disabled={isAddingSubtask}
               maxLength={200}
-              aria-label="Yeni alt görev ekle"
-              placeholder="Alt görev ekle ve Enter'a bas..."
+              aria-label={t.addSubtaskPlaceholder}
+              placeholder={t.addSubtaskPlaceholder}
               className="flex-1 min-w-0 rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:border-[var(--border-strong)] focus:outline-none disabled:opacity-60"
             />
             <button
               type="submit"
               disabled={!newSubtaskTitle.trim() || isAddingSubtask}
-              aria-label="Alt görev ekle"
+              aria-label={t.addButton}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--canvas)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] disabled:opacity-35"
             >
               <Plus className="h-4 w-4" />
@@ -435,7 +432,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
               htmlFor="detail-category-select"
               className="block font-display text-xs font-semibold text-[var(--text-muted)]"
             >
-              Kategori
+              {t.categories}
             </label>
             <select
               id="detail-category-select"
@@ -444,7 +441,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors focus:border-[var(--border-strong)] focus:outline-none"
             >
               <option value="" className="bg-[var(--surface)]">
-                Kategorisiz
+                {t.uncategorized}
               </option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id} className="bg-[var(--surface)]">
@@ -457,10 +454,10 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
           {/* Priority */}
           <div className="space-y-1.5">
             <p className="font-display text-xs font-semibold text-[var(--text-muted)]">
-              Öncelik
+              {t.priorityLabel}
             </p>
             <div className="grid grid-cols-3 gap-1 rounded-lg bg-[var(--surface-subtle)] p-1 border border-[var(--border)]">
-              {PRIORITIES.map(({ value, label }) => {
+              {priorities.map(({ value, label }) => {
                 const active = todo.priority === value;
                 return (
                   <button
@@ -481,69 +478,107 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
             </div>
           </div>
 
-          {/* Due Date */}
-          <div className="space-y-2">
-            <label
-              htmlFor="detail-due-date"
-              className="block font-display text-xs font-semibold text-[var(--text-muted)]"
-            >
-              Son Tarih
-            </label>
+          {/* Optional Start Date & End / Due Date */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-display text-xs font-semibold text-[var(--text-muted)]">
+                {t.dateButton}
+              </span>
+              {hasAnyDate && (
+                <button
+                  type="button"
+                  onClick={() => void onUpdate(todo.id, { startDate: null, dueDate: null })}
+                  className="rounded-md px-2 py-0.5 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] whitespace-nowrap"
+                >
+                  {t.clearDate}
+                </button>
+              )}
+            </div>
+
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => void onUpdate(todo.id, { dueDate: todayStr })}
                 className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
-                  todo.dueDate === todayStr
+                  todo.dueDate === todayStr && !todo.startDate
                     ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
                     : 'border-[var(--border)] bg-[var(--canvas)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
-                Bugün
+                {t.today}
               </button>
               <button
                 type="button"
                 onClick={() => void onUpdate(todo.id, { dueDate: tomorrowStr })}
                 className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
-                  todo.dueDate === tomorrowStr
+                  todo.dueDate === tomorrowStr && !todo.startDate
                     ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
                     : 'border-[var(--border)] bg-[var(--canvas)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
-                Yarın
+                {t.tomorrow}
               </button>
-              {todo.dueDate && (
-                <button
-                  type="button"
-                  onClick={() => void onUpdate(todo.id, { dueDate: null })}
-                  className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] whitespace-nowrap"
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label
+                  htmlFor="detail-start-date"
+                  className="block text-[11px] font-medium text-[var(--text-muted)]"
                 >
-                  Temizle
-                </button>
-              )}
+                  {t.startDateLabel}
+                </label>
+                <div className="relative flex items-center">
+                  <Calendar className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                  <input
+                    id="detail-start-date"
+                    type="date"
+                    value={todo.startDate ?? ''}
+                    onChange={(e) =>
+                      void onUpdate(todo.id, { startDate: e.target.value || null })
+                    }
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--canvas)] pl-8 pr-2 py-1.5 text-xs text-[var(--text-primary)] transition-colors focus:border-[var(--border-strong)] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="detail-due-date"
+                  className="block text-[11px] font-medium text-[var(--text-muted)]"
+                >
+                  {t.dueDateLabel}
+                </label>
+                <div className="relative flex items-center">
+                  <Calendar className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                  <input
+                    id="detail-due-date"
+                    type="date"
+                    value={todo.dueDate ?? ''}
+                    onChange={(e) =>
+                      void onUpdate(todo.id, { dueDate: e.target.value || null })
+                    }
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--canvas)] pl-8 pr-2 py-1.5 text-xs text-[var(--text-primary)] transition-colors focus:border-[var(--border-strong)] focus:outline-none"
+                  />
+                </div>
+              </div>
             </div>
-            <div className="relative flex items-center">
-              <Calendar className="pointer-events-none absolute left-3 h-4 w-4 text-[var(--text-muted)]" />
-              <input
-                id="detail-due-date"
-                type="date"
-                value={todo.dueDate ?? ''}
-                onChange={(e) => void onUpdate(todo.id, { dueDate: e.target.value || null })}
-                className="w-full rounded-lg border border-[var(--border)] bg-[var(--canvas)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] transition-colors focus:border-[var(--border-strong)] focus:outline-none"
-              />
-            </div>
+
+            <p className="text-[11px] leading-snug text-[var(--text-muted)]">
+              {t.optionalDateHint}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer (Non-technical user-friendly copy) */}
       <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--text-muted)]">
         <span>
           {saveHint === 'saved'
-            ? 'Otomatik kaydedildi'
+            ? t.autoSavedBadge
             : createdFormatted
-              ? `Oluşturuldu: ${createdFormatted}`
-              : 'SQLite ile senkron'}
+              ? `${t.createdPrefix}: ${createdFormatted}`
+              : t.instantSaveBadge}
         </span>
         <button
           type="button"
@@ -558,7 +593,7 @@ export const TodoDetailPanel = React.memo(function TodoDetailPanel({
           className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          <span>Çöpe Taşı</span>
+          <span>{t.deleteToTrashButton}</span>
         </button>
       </div>
     </aside>

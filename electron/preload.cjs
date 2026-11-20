@@ -10,4 +10,11 @@ contextBridge.exposeInMainWorld('agendameaWindow', {
     ipcRenderer.on('window:maximized-changed', listener);
     return () => ipcRenderer.removeListener('window:maximized-changed', listener);
   },
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  downloadAndInstallUpdate: (url) => ipcRenderer.invoke('updater:download-and-install', url),
+  onUpdateProgress: (callback) => {
+    const listener = (_event, percent) => callback(Number(percent) || 0);
+    ipcRenderer.on('updater:progress', listener);
+    return () => ipcRenderer.removeListener('updater:progress', listener);
+  },
 });

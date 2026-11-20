@@ -1,3 +1,5 @@
+import type { LanguageCode } from './i18n/languages';
+
 export type Priority = 'low' | 'normal' | 'high';
 
 export type ThemeMode = 'light' | 'dark';
@@ -54,6 +56,7 @@ export interface Todo {
   important: boolean;
   pinned: boolean;
   priority: Priority;
+  startDate?: string | null; // YYYY-MM-DD or null
   dueDate: string | null; // YYYY-MM-DD or null
   categoryId: string | null;
   sortOrder: number;
@@ -69,6 +72,8 @@ export interface AppSettings {
   dragLocked: boolean;
   sidebarCollapsed: boolean;
   themeCustomized?: boolean;
+  language?: LanguageCode;
+  autoUpdateCheck?: boolean;
 }
 
 export interface BootstrapPayload {
@@ -92,6 +97,7 @@ export interface TodoPatch {
   important?: boolean;
   pinned?: boolean;
   priority?: Priority;
+  startDate?: string | null;
   dueDate?: string | null;
   categoryId?: string | null;
 }
@@ -99,4 +105,19 @@ export interface TodoPatch {
 export interface SubtaskPatch {
   title?: string;
   completed?: boolean;
+}
+
+export interface UpdateCheckResult {
+  ok: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  releaseName: string;
+  releaseNotes: string;
+  publishedAt: string | null;
+  releaseUrl: string;
+  setupUrl: string | null;
+  portableUrl: string | null;
+  checkedAt: string;
+  error?: string;
 }

@@ -24,6 +24,13 @@ import { WindowControls } from './components/WindowControls';
 import { useDelayedFocus } from './hooks/useDelayedFocus';
 import { useToast } from './hooks/useToast';
 import { useTodayDate } from './hooks/useTodayDate';
+import { I18nProvider, readInitialLanguage } from './i18n/I18nContext';
+import {
+  getLanguageMeta,
+  isValidLanguageCode,
+  type LanguageCode,
+} from './i18n/languages';
+import { getDictionary } from './i18n/localesWorld';
 import type {
   ActiveView,
   Category,
@@ -35,6 +42,7 @@ import type {
   ThemeMode,
   Todo,
   TodoPatch,
+  UpdateCheckResult,
 } from './types';
 import { applyThemeToDocument, isValidThemeId } from './utils/themes';
 import {
@@ -46,13 +54,6 @@ import {
 } from './utils/todoLogic';
 
 const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
-
-const SMART_VIEW_TITLES: Record<string, string> = {
-  all: 'Tüm Görevler',
-  today: 'Bugün',
-  important: 'Önemli',
-  completed: 'Tamamlananlar',
-};
 
 function readInitialTheme(): {
   mode: ThemeMode;
@@ -88,13 +89,26 @@ function errorMessage(err: unknown, fallback: string): string {
 
 export default function App() {
   const initialTheme = useMemo(() => readInitialTheme(), []);
+  const initialLang = useMemo(() => readInitialLanguage(), []);
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialTheme.mode);
   const [themeId, setThemeId] = useState<ThemeId>(initialTheme.themeId);
+  const [language, setLanguage] = useState<LanguageCode>(initialLang.code);
+  const [autoUpdateCheck, setAutoUpdateCheck] = useState<boolean>(true);
   const [dragLocked, setDragLocked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() =>
     readInitialSidebarCollapsed(),
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [updateState, setUpdateState] = useState<{
+    status: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'error';
+    result: UpdateCheckResult | null;
+    downloadPercent: number | null;
+  }>({
+    status: 'idle',
+    result: null,
+    downloadPercent: null,
+  });
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
@@ -117,6 +131,9 @@ export default function App() {
     position: 'before' | 'after';
   } | null>(null);
 
+  const langMeta = useMemo(() => getLanguageMeta(language), [language]);
+  const t = useMemo(() => getDictionary(language), [language]);
+
   const {
     undoToast,
     infoToast,
@@ -125,39 +142,48 @@ export default function App() {
     showInfoToast,
     clearInfoToast,
   } = useToast();
-  const { todayStr, todayFormatted } = useTodayDate();
+  const { todayStr, todayFormatted } = useTodayDate(langMeta.intlLocale);
 
   const quickAddRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scheduleFocus = useDelayedFocus();
-  // Sequence counters per entity prevent out-of-order PATCH responses from overwriting newer edits
   const todoUpdateSeqRef = useRef<Map<string, number>>(new Map());
   const categoryUpdateSeqRef = useRef<Map<string, number>>(new Map());
   const subtaskUpdateSeqRef = useRef<Map<string, number>>(new Map());
   const reorderCatSeqRef = useRef(0);
   const reorderTodoSeqRef = useRef(0);
-  // Tracks in-flight soft deletes so immediate Undo & Empty Trash await DELETE first (resolves true iff delete succeeded)
   const pendingDeletesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const pendingSubtaskDeletesRef = useRef<Set<string>>(new Set());
   const isEmptyingTrashRef = useRef(false);
-  // Prevents duplicate concurrent restore/permanent-delete requests per trash item
   const pendingTrashOpsRef = useRef<Set<string>>(new Set());
-  // Prevents an in-flight initial bootstrap from overwriting theme/sidebar preferences just changed by the user
   const themeDirtyRef = useRef(false);
   const sidebarDirtyRef = useRef(false);
+  const langDirtyRef = useRef(false);
   const todosRef = useRef(todos);
   todosRef.current = todos;
   const trashedCategoriesRef = useRef(trashedCategories);
   trashedCategoriesRef.current = trashedCategories;
   const sidebarCollapsedRef = useRef(sidebarCollapsed);
   sidebarCollapsedRef.current = sidebarCollapsed;
+  const tRef = useRef(t);
+  tRef.current = t;
 
-  // Single authoritative effect for applying theme tokens & syncing localStorage cache
   useEffect(() => {
     applyThemeToDocument(themeId, themeMode);
   }, [themeId, themeMode]);
 
-  // Load SQLite state (silent=true avoids flashing loading skeleton on background error rollback)
+  // Listen to Electron native update download progress if available
+  useEffect(() => {
+    const unsub = window.agendameaWindow?.onUpdateProgress?.((pct) => {
+      setUpdateState((prev) =>
+        prev.status === 'downloading' ? { ...prev, downloadPercent: pct } : prev,
+      );
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
   const loadData = useCallback(async (silent = false) => {
     if (!silent) {
       setIsLoading(true);
@@ -170,6 +196,13 @@ export default function App() {
       setTrashedCategories(data.trashedCategories);
       setTrashedTodos(data.trashedTodos);
       setDragLocked(Boolean(data.settings.dragLocked));
+      setAutoUpdateCheck(
+        data.settings.autoUpdateCheck === undefined ? true : Boolean(data.settings.autoUpdateCheck),
+      );
+
+      if (!langDirtyRef.current && data.settings.language && isValidLanguageCode(data.settings.language)) {
+        setLanguage(data.settings.language);
+      }
 
       if (!sidebarDirtyRef.current) {
         const dbCollapsed = Boolean(data.settings.sidebarCollapsed);
@@ -209,6 +242,93 @@ export default function App() {
   useEffect(() => {
     void loadData(false);
   }, [loadData]);
+
+  // Manual & Automatic Update Check
+  const runUpdateCheck = useCallback(
+    async (isManual: boolean) => {
+      setUpdateState((prev) => ({
+        ...prev,
+        status: 'checking',
+      }));
+      try {
+        const res = await api.checkForUpdates();
+        if (!res.ok) {
+          setUpdateState({
+            status: isManual ? 'error' : 'idle',
+            result: res,
+            downloadPercent: null,
+          });
+          return;
+        }
+        if (res.updateAvailable) {
+          setUpdateState({
+            status: 'available',
+            result: res,
+            downloadPercent: null,
+          });
+          if (!isManual) {
+            showInfoToast(`${tRef.current.updateAvailableLabel}: v${res.latestVersion}`, 'info');
+          }
+        } else {
+          setUpdateState({
+            status: 'up-to-date',
+            result: res,
+            downloadPercent: null,
+          });
+        }
+      } catch {
+        setUpdateState((prev) => ({
+          status: isManual ? 'error' : 'idle',
+          result: prev.result,
+          downloadPercent: null,
+        }));
+      }
+    },
+    [showInfoToast],
+  );
+
+  // Automatic background update check on startup & every 6 hours when enabled
+  useEffect(() => {
+    if (!autoUpdateCheck) return;
+    const startupTimer = window.setTimeout(() => {
+      void runUpdateCheck(false);
+    }, 3000);
+    const periodicTimer = window.setInterval(
+      () => {
+        void runUpdateCheck(false);
+      },
+      6 * 60 * 60 * 1000,
+    );
+    return () => {
+      window.clearTimeout(startupTimer);
+      window.clearInterval(periodicTimer);
+    };
+  }, [autoUpdateCheck, runUpdateCheck]);
+
+  const handleManualCheckForUpdates = useCallback(async () => {
+    await runUpdateCheck(true);
+  }, [runUpdateCheck]);
+
+  const handleDownloadAndInstallUpdate = useCallback(async () => {
+    const res = updateState.result;
+    if (!res) return;
+    const downloadUrl = res.setupUrl || res.portableUrl || res.releaseUrl;
+    if (window.agendameaWindow?.downloadAndInstallUpdate && res.setupUrl) {
+      setUpdateState((prev) => ({
+        ...prev,
+        status: 'downloading',
+        downloadPercent: 5,
+      }));
+      await window.agendameaWindow.downloadAndInstallUpdate(res.setupUrl);
+      setUpdateState((prev) => ({
+        ...prev,
+        status: 'available',
+        downloadPercent: null,
+      }));
+      return;
+    }
+    window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+  }, [updateState.result]);
 
   // Handle Windows Jump List / PWA shortcut launch query params (?view=... & ?action=new)
   useEffect(() => {
@@ -258,7 +378,6 @@ export default function App() {
     searchInputRef.current?.focus();
   }, [scheduleFocus]);
 
-  // Global keyboard shortcuts (including Alt+ArrowUp/Down accessible task reordering)
   const keyboardReorderRef = useRef<((direction: 'up' | 'down') => void) | null>(null);
   const keyStateRef = useRef({
     isSettingsOpen,
@@ -294,8 +413,10 @@ export default function App() {
 
       if (e.key === 'Escape') {
         if (state.isSettingsOpen) {
-          setIsSettingsOpen(false);
-        } else if (state.isMobileSidebarOpen) {
+          // SettingsModal handles Escape internally (including returning from Legal sub-pages)
+          return;
+        }
+        if (state.isMobileSidebarOpen) {
           setIsMobileSidebarOpen(false);
         } else if (state.selectedTodoId) {
           setSelectedTodoId(null);
@@ -326,7 +447,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Theme handlers (instant state + keepalive SQLite save)
   const handleModeChange = useCallback(
     (nextMode: ThemeMode) => {
       themeDirtyRef.current = true;
@@ -349,6 +469,27 @@ export default function App() {
     [showInfoToast],
   );
 
+  const handleChangeLanguage = useCallback(
+    (nextLang: LanguageCode) => {
+      langDirtyRef.current = true;
+      setLanguage(nextLang);
+      void api.updateSettings({ language: nextLang }).catch((err) => {
+        showInfoToast(errorMessage(err, 'Dil tercihi kaydedilemedi.'), 'error');
+      });
+    },
+    [showInfoToast],
+  );
+
+  const handleToggleAutoUpdateCheck = useCallback(
+    (enabled: boolean) => {
+      setAutoUpdateCheck(enabled);
+      void api.updateSettings({ autoUpdateCheck: enabled }).catch((err) => {
+        showInfoToast(errorMessage(err, 'Güncelleme ayarı kaydedilemedi.'), 'error');
+      });
+    },
+    [showInfoToast],
+  );
+
   const handleToggleSidebarCollapse = useCallback(() => {
     sidebarDirtyRef.current = true;
     const next = !sidebarCollapsedRef.current;
@@ -362,7 +503,6 @@ export default function App() {
     void api.updateSettings({ sidebarCollapsed: next }).catch(() => {});
   }, []);
 
-  // Category CRUD (instant SQLite save with full error handling)
   const handleCreateCategory = useCallback(
     async (payload: { id: string; name: string; color: string }) => {
       try {
@@ -436,7 +576,7 @@ export default function App() {
         setActiveView((prev) =>
           prev.type === 'category' && prev.id === id ? { type: 'smart', id: 'all' } : prev,
         );
-        showUndoToast('category', id, 'Kategori çöp kutusuna taşındı');
+        showUndoToast('category', id, tRef.current.categoryMovedToTrashToast);
       } catch (err) {
         showInfoToast(errorMessage(err, 'Kategori silinemedi.'), 'error');
         void loadData(true);
@@ -477,10 +617,10 @@ export default function App() {
         categoryUpdateSeqRef.current.delete(id);
         setTrashedCategories((prev) => prev.filter((c) => c.id !== id));
         setTodos((prev) =>
-          prev.map((t) => (t.categoryId === id ? { ...t, categoryId: null } : t)),
+          prev.map((tItem) => (tItem.categoryId === id ? { ...tItem, categoryId: null } : tItem)),
         );
         setTrashedTodos((prev) =>
-          prev.map((t) => (t.categoryId === id ? { ...t, categoryId: null } : t)),
+          prev.map((tItem) => (tItem.categoryId === id ? { ...tItem, categoryId: null } : tItem)),
         );
       } catch (err) {
         showInfoToast(errorMessage(err, 'Kategori kalıcı olarak silinemedi.'), 'error');
@@ -492,19 +632,19 @@ export default function App() {
     [showInfoToast, loadData],
   );
 
-  // Todo CRUD (optimistic + sequence-guarded + silent error rollback)
   const handleAddTodo = useCallback(
     async (payload: {
       id?: string;
       title: string;
       priority: Priority;
+      startDate?: string | null;
       dueDate: string | null;
       categoryId: string | null;
       important: boolean;
     }) => {
       try {
         const created = await api.createTodo(payload);
-        setTodos((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+        setTodos((prev) => [created, ...prev.filter((tItem) => tItem.id !== created.id)]);
       } catch (err) {
         showInfoToast(errorMessage(err, 'Görev eklenemedi.'), 'error');
         throw err;
@@ -519,10 +659,9 @@ export default function App() {
       patch: TodoPatch,
       options?: { keepalive?: boolean },
     ): Promise<boolean> => {
-      // Ignore stale unmount-flush updates for todos that were just deleted or cleared
       if (
         pendingDeletesRef.current.has(id) ||
-        !todosRef.current.some((t) => t.id === id)
+        !todosRef.current.some((tItem) => tItem.id === id)
       ) {
         return false;
       }
@@ -531,21 +670,20 @@ export default function App() {
       todoUpdateSeqRef.current.set(id, seq);
 
       setTodos((prev) =>
-        prev.map((t) =>
-          t.id === id
+        prev.map((tItem) =>
+          tItem.id === id
             ? {
-                ...t,
+                ...tItem,
                 ...patch,
                 updatedAt: new Date().toISOString(),
               }
-            : t,
+            : tItem,
         ),
       );
       try {
         const updated = await api.updateTodo(id, patch, options);
-        // Only apply server snapshot if no newer update for this todo was dispatched
         if (todoUpdateSeqRef.current.get(id) === seq) {
-          setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
+          setTodos((prev) => prev.map((tItem) => (tItem.id === id ? updated : tItem)));
         }
         return true;
       } catch (err) {
@@ -559,27 +697,26 @@ export default function App() {
     [showInfoToast, loadData],
   );
 
-  // Soft delete todo -> moves to trash (tracked so fast Undo awaits DELETE first)
   const handleDeleteTodo = useCallback(
     (id: string) => {
-      const target = todosRef.current.find((t) => t.id === id);
+      const target = todosRef.current.find((tItem) => tItem.id === id);
       if (!target) return;
 
       todoUpdateSeqRef.current.delete(id);
       const deletedAt = new Date().toISOString();
-      setTodos((prev) => prev.filter((t) => t.id !== id));
+      setTodos((prev) => prev.filter((tItem) => tItem.id !== id));
       setTrashedTodos((prev) => [
         { ...target, deletedAt },
-        ...prev.filter((t) => t.id !== id),
+        ...prev.filter((tItem) => tItem.id !== id),
       ]);
       setSelectedTodoId((prev) => (prev === id ? null : prev));
 
-      showUndoToast('todo', id, 'Görev çöp kutusuna taşındı');
+      showUndoToast('todo', id, tRef.current.todoMovedToTrashToast);
 
       const deletePromise = api
         .deleteTodo(id)
         .then((trashed) => {
-          setTrashedTodos((prev) => prev.map((t) => (t.id === id ? trashed : t)));
+          setTrashedTodos((prev) => prev.map((tItem) => (tItem.id === id ? trashed : tItem)));
           return true;
         })
         .catch((err) => {
@@ -603,15 +740,14 @@ export default function App() {
       if (pendingTrashOpsRef.current.has(opKey)) return;
       pendingTrashOpsRef.current.add(opKey);
       try {
-        // Wait for any in-flight soft delete of this todo to finish before restoring
         const inFlightDelete = pendingDeletesRef.current.get(id);
         if (inFlightDelete) {
           const deleteSucceeded = await inFlightDelete;
           if (!deleteSucceeded) return;
         }
         const restored = await api.restoreTodo(id);
-        setTrashedTodos((prev) => prev.filter((t) => t.id !== id));
-        setTodos((prev) => [restored, ...prev.filter((t) => t.id !== id)]);
+        setTrashedTodos((prev) => prev.filter((tItem) => tItem.id !== id));
+        setTodos((prev) => [restored, ...prev.filter((tItem) => tItem.id !== id)]);
       } catch (err) {
         showInfoToast(errorMessage(err, 'Görev geri yüklenemedi.'), 'error');
         void loadData(true);
@@ -635,7 +771,7 @@ export default function App() {
         }
         await api.permanentDeleteTodo(id);
         todoUpdateSeqRef.current.delete(id);
-        setTrashedTodos((prev) => prev.filter((t) => t.id !== id));
+        setTrashedTodos((prev) => prev.filter((tItem) => tItem.id !== id));
       } catch (err) {
         showInfoToast(errorMessage(err, 'Görev kalıcı olarak silinemedi.'), 'error');
         void loadData(true);
@@ -671,12 +807,12 @@ export default function App() {
         const { trashedTodos: newlyTrashed } = await api.clearCompleted(scopeCatId);
         if (newlyTrashed.length === 0) return;
 
-        const trashedIds = new Set(newlyTrashed.map((t) => t.id));
+        const trashedIds = new Set(newlyTrashed.map((tItem) => tItem.id));
         trashedIds.forEach((tid) => todoUpdateSeqRef.current.delete(tid));
-        setTodos((prev) => prev.filter((t) => !trashedIds.has(t.id)));
+        setTodos((prev) => prev.filter((tItem) => !trashedIds.has(tItem.id)));
         setTrashedTodos((prev) => [
           ...newlyTrashed,
-          ...prev.filter((t) => !trashedIds.has(t.id)),
+          ...prev.filter((tItem) => !trashedIds.has(tItem.id)),
         ]);
         setSelectedTodoId((prev) => (prev && trashedIds.has(prev) ? null : prev));
       } catch (err) {
@@ -691,7 +827,6 @@ export default function App() {
     if (isEmptyingTrashRef.current) return;
     isEmptyingTrashRef.current = true;
     try {
-      // Await any in-flight soft deletes so a late DELETE never resurrects a ghost item in trash
       if (pendingDeletesRef.current.size > 0) {
         await Promise.allSettled(Array.from(pendingDeletesRef.current.values()));
       }
@@ -702,10 +837,10 @@ export default function App() {
       setTrashedCategories([]);
       if (removedCatIds.size > 0) {
         setTodos((prev) =>
-          prev.map((t) =>
-            t.categoryId && removedCatIds.has(t.categoryId)
-              ? { ...t, categoryId: null }
-              : t,
+          prev.map((tItem) =>
+            tItem.categoryId && removedCatIds.has(tItem.categoryId)
+              ? { ...tItem, categoryId: null }
+              : tItem,
           ),
         );
       }
@@ -725,6 +860,7 @@ export default function App() {
       categoryUpdateSeqRef.current.clear();
       themeDirtyRef.current = false;
       sidebarDirtyRef.current = false;
+      langDirtyRef.current = false;
       const nextCollapsed = Boolean(restored.settings.sidebarCollapsed);
       try {
         localStorage.setItem('agendamea-sidebar-collapsed', String(nextCollapsed));
@@ -738,22 +874,29 @@ export default function App() {
       setThemeMode(restored.settings.themeMode);
       setThemeId(restored.settings.themeId);
       setDragLocked(Boolean(restored.settings.dragLocked));
+      if (restored.settings.language && isValidLanguageCode(restored.settings.language)) {
+        setLanguage(restored.settings.language);
+      }
+      setAutoUpdateCheck(
+        restored.settings.autoUpdateCheck === undefined
+          ? true
+          : Boolean(restored.settings.autoUpdateCheck),
+      );
       setSidebarCollapsed(nextCollapsed);
       setSelectedTodoId(null);
       setActiveView({ type: 'smart', id: 'all' });
-      showInfoToast('Yedek başarıyla geri yüklendi.');
+      showInfoToast(tRef.current.backupRestoredToast);
     },
     [clearUndoToast, showInfoToast],
   );
 
-  // Subtask CRUD (sequence-guarded + full error rollback)
   const handleAddSubtask = useCallback(
     async (todoId: string, title: string): Promise<boolean> => {
       try {
         const created = await api.createSubtask(todoId, title);
         setTodos((prev) =>
-          prev.map((t) =>
-            t.id === todoId ? { ...t, subtasks: [...t.subtasks, created] } : t,
+          prev.map((tItem) =>
+            tItem.id === todoId ? { ...tItem, subtasks: [...tItem.subtasks, created] } : tItem,
           ),
         );
         return true;
@@ -772,15 +915,15 @@ export default function App() {
       subtaskUpdateSeqRef.current.set(subtaskId, seq);
 
       setTodos((prev) =>
-        prev.map((t) =>
-          t.id === todoId
+        prev.map((tItem) =>
+          tItem.id === todoId
             ? {
-                ...t,
-                subtasks: t.subtasks.map((s) =>
+                ...tItem,
+                subtasks: tItem.subtasks.map((s) =>
                   s.id === subtaskId ? { ...s, completed } : s,
                 ),
               }
-            : t,
+            : tItem,
         ),
       );
       try {
@@ -805,10 +948,10 @@ export default function App() {
       subtaskUpdateSeqRef.current.delete(subtaskId);
 
       setTodos((prev) =>
-        prev.map((t) =>
-          t.id === todoId
-            ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subtaskId) }
-            : t,
+        prev.map((tItem) =>
+          tItem.id === todoId
+            ? { ...tItem, subtasks: tItem.subtasks.filter((s) => s.id !== subtaskId) }
+            : tItem,
         ),
       );
       try {
@@ -823,7 +966,6 @@ export default function App() {
     [showInfoToast, loadData],
   );
 
-  // Derived data
   const categoryMap = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
     [categories],
@@ -849,8 +991,8 @@ export default function App() {
 
   const { activeCountInView, completedCountInView } = useMemo(() => {
     let completed = 0;
-    for (const t of visibleTodos) {
-      if (t.completed) completed += 1;
+    for (const tItem of visibleTodos) {
+      if (tItem.completed) completed += 1;
     }
     return {
       activeCountInView: visibleTodos.length - completed,
@@ -859,7 +1001,7 @@ export default function App() {
   }, [visibleTodos]);
 
   const selectedTodo = useMemo(
-    () => todos.find((t) => t.id === selectedTodoId) ?? null,
+    () => todos.find((tItem) => tItem.id === selectedTodoId) ?? null,
     [todos, selectedTodoId],
   );
 
@@ -901,7 +1043,6 @@ export default function App() {
   const isCompletedView = activeView.type === 'smart' && activeView.id === 'completed';
   const canDragTodos = !dragLocked && !deferredSearchQuery.trim() && visibleTodos.length > 1;
 
-  // Ref mirrors keep TodoItem drag callbacks referentially stable so React.memo prevents full-list re-renders
   const visibleTodosRef = useRef(visibleTodos);
   visibleTodosRef.current = visibleTodos;
   const draggedTodoIdRef = useRef(draggedTodoId);
@@ -913,32 +1054,31 @@ export default function App() {
   const sortByRef = useRef(sortBy);
   sortByRef.current = sortBy;
 
-  // Drag-and-drop & keyboard reorder handler for todos (respecting pinned and completion status groups)
   const handleDropTodo = useCallback(
     (sourceId: string, targetId: string, position: 'before' | 'after') => {
       if (dragLockedRef.current || sourceId === targetId) return;
 
       const currentVisible = visibleTodosRef.current;
-      const sourceTodo = currentVisible.find((t) => t.id === sourceId);
-      const targetTodo = currentVisible.find((t) => t.id === targetId);
+      const sourceTodo = currentVisible.find((tItem) => tItem.id === sourceId);
+      const targetTodo = currentVisible.find((tItem) => tItem.id === targetId);
       if (!sourceTodo || !targetTodo) return;
       if (sourceTodo.pinned !== targetTodo.pinned || sourceTodo.completed !== targetTodo.completed) {
         return;
       }
 
-      const visibleIds = currentVisible.map((t) => t.id);
+      const visibleIds = currentVisible.map((tItem) => tItem.id);
       const reorderedVisible = moveIdRelative(visibleIds, sourceId, targetId, position);
       const visibleSet = new Set(reorderedVisible);
 
       const allSorted = [...todosRef.current].sort((a, b) => a.sortOrder - b.sortOrder);
       let cursor = 0;
-      const nextOrderedIds = allSorted.map((t) => {
-        if (visibleSet.has(t.id)) {
+      const nextOrderedIds = allSorted.map((tItem) => {
+        if (visibleSet.has(tItem.id)) {
           const replacement = reorderedVisible[cursor];
           cursor += 1;
           return replacement;
         }
-        return t.id;
+        return tItem.id;
       });
 
       const finalOrderMap = new Map(nextOrderedIds.map((tid, i) => [tid, i]));
@@ -946,9 +1086,9 @@ export default function App() {
         setSortBy('manual');
       }
       setTodos((prev) =>
-        prev.map((t) => ({
-          ...t,
-          sortOrder: finalOrderMap.get(t.id) ?? t.sortOrder,
+        prev.map((tItem) => ({
+          ...tItem,
+          sortOrder: finalOrderMap.get(tItem.id) ?? tItem.sortOrder,
         })),
       );
       const seq = reorderTodoSeqRef.current + 1;
@@ -963,10 +1103,9 @@ export default function App() {
     [showInfoToast, loadData],
   );
 
-  // Wire Alt+ArrowUp / Alt+ArrowDown accessible reorder for the currently selected todo
   keyboardReorderRef.current = (direction: 'up' | 'down') => {
     if (!canDragTodos || !selectedTodoId) return;
-    const idx = visibleTodos.findIndex((t) => t.id === selectedTodoId);
+    const idx = visibleTodos.findIndex((tItem) => tItem.id === selectedTodoId);
     if (idx === -1) return;
     const neighborIdx = direction === 'up' ? idx - 1 : idx + 1;
     const neighbor = visibleTodos[neighborIdx];
@@ -974,7 +1113,6 @@ export default function App() {
     handleDropTodo(selectedTodoId, neighbor.id, direction === 'up' ? 'before' : 'after');
   };
 
-  // Stable callbacks for memoized TodoItem & Sidebar components
   const handleSelectTodo = useCallback((id: string) => {
     setSelectedTodoId((prev) => (prev === id ? null : id));
   }, []);
@@ -1015,8 +1153,8 @@ export default function App() {
       const draggedId = draggedTodoIdRef.current;
       if (!canDragTodosRef.current || !draggedId || draggedId === id) return;
       const list = visibleTodosRef.current;
-      const sourceTodo = list.find((t) => t.id === draggedId);
-      const targetTodo = list.find((t) => t.id === id);
+      const sourceTodo = list.find((tItem) => tItem.id === draggedId);
+      const targetTodo = list.find((tItem) => tItem.id === id);
       if (
         !sourceTodo ||
         !targetTodo ||
@@ -1100,354 +1238,368 @@ export default function App() {
     void handleUndoSoftDelete();
   }, [handleUndoSoftDelete]);
 
-  // Current view title & metadata
+  const smartViewTitles: Record<string, string> = {
+    all: t.allTasks,
+    today: t.today,
+    important: t.important,
+    completed: t.completed,
+  };
+
   const activeCategory =
     activeView.type === 'category' ? categoryMap.get(activeView.id) : undefined;
   const viewTitle =
     activeView.type === 'smart'
-      ? SMART_VIEW_TITLES[activeView.id]
-      : activeCategory?.name ?? 'Kategori';
+      ? smartViewTitles[activeView.id]
+      : activeCategory?.name ?? t.categories;
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden bg-[var(--canvas)] text-[var(--text-primary)]">
-      {/* Sidebar Navigation (includes Search above Tüm Görevler & Minimal Mode) */}
-      <Sidebar
-        activeView={activeView}
-        onSelectView={handleSelectView}
-        categories={categories}
-        counts={counts}
-        dragLocked={dragLocked}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={handleToggleSidebarCollapse}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchInputRef={searchInputRef}
-        onOpenSettings={handleOpenSettings}
-        onCreateCategory={handleCreateCategory}
-        onUpdateCategory={handleUpdateCategory}
-        onTogglePinCategory={handleTogglePinCategory}
-        onDeleteCategory={handleDeleteCategory}
-        onReorderCategories={handleReorderCategories}
-        isOpenMobile={isMobileSidebarOpen}
-        onCloseMobile={handleCloseMobileSidebar}
-      />
-
-      {/* Main Content Area (No Top Header Bar) */}
-      <div className="relative flex flex-1 min-w-0 flex-col h-full overflow-hidden">
-        {/* Subtle frameless drag strip for Windows Electron / PWA Window Controls Overlay (leaves top-right clear for WindowControls) */}
-        <div
-          aria-hidden="true"
-          className="app-drag-region absolute left-0 right-36 top-0 z-10 h-9 select-none"
+    <I18nProvider lang={language} onChangeLanguage={handleChangeLanguage}>
+      <div className="relative flex h-full w-full overflow-hidden bg-[var(--canvas)] text-[var(--text-primary)]">
+        {/* Sidebar Navigation */}
+        <Sidebar
+          activeView={activeView}
+          onSelectView={handleSelectView}
+          categories={categories}
+          counts={counts}
+          dragLocked={dragLocked}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={handleToggleSidebarCollapse}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchInputRef={searchInputRef}
+          onOpenSettings={handleOpenSettings}
+          onCreateCategory={handleCreateCategory}
+          onUpdateCategory={handleUpdateCategory}
+          onTogglePinCategory={handleTogglePinCategory}
+          onDeleteCategory={handleDeleteCategory}
+          onReorderCategories={handleReorderCategories}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={handleCloseMobileSidebar}
         />
 
-        {/* Scrollable Workspace Viewport */}
-        <main className="flex-1 overflow-y-auto px-4 pt-11 pb-8 sm:px-8 sm:pt-10">
-          <div className="mx-auto w-full max-w-[820px] space-y-5">
-            {/* Clean Workspace Title & Contextual Quiet Meta Line */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                  aria-label="Menüyü aç"
-                  className="app-no-drag flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] md:hidden shrink-0"
-                >
-                  <Menu className="h-4 w-4" />
-                </button>
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {activeCategory && <ColorDot color={activeCategory.color} size="md" />}
-                  <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--text-primary)] truncate">
-                    {viewTitle}
-                  </h1>
+        {/* Main Content Area */}
+        <div className="relative flex flex-1 min-w-0 flex-col h-full overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="app-drag-region absolute left-0 right-36 top-0 z-10 h-9 select-none"
+          />
+
+          <main className="flex-1 overflow-y-auto px-4 pt-11 pb-8 sm:px-8 sm:pt-10">
+            <div className="mx-auto w-full max-w-[820px] space-y-5">
+              {/* Workspace Title & Date Line */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    aria-label={t.openMenu}
+                    className="app-no-drag flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] md:hidden shrink-0"
+                  >
+                    <Menu className="h-4 w-4" />
+                  </button>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {activeCategory && <ColorDot color={activeCategory.color} size="md" />}
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--text-primary)] truncate">
+                      {viewTitle}
+                    </h1>
+                  </div>
+                </div>
+
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm text-[var(--text-muted)] capitalize">
+                    {todayFormatted}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-mono-tabular whitespace-nowrap shrink-0">
+                    <span>
+                      {activeCountInView} {t.activeCountLabel}
+                    </span>
+                    {completedCountInView > 0 && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span>
+                          {completedCountInView} {t.completedCountLabel}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm text-[var(--text-muted)] capitalize">
-                  {todayFormatted}
-                </p>
-                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-mono-tabular whitespace-nowrap shrink-0">
-                  <span>{activeCountInView} aktif</span>
-                  {completedCountInView > 0 && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span>{completedCountInView} tamamlanan</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Add Bar */}
-            {!isCompletedView && (
-              <QuickAddBar
-                inputRef={quickAddRef}
-                categories={categories}
-                todayStr={todayStr}
-                defaultCategoryId={
-                  activeView.type === 'category' ? activeView.id : null
-                }
-                defaultImportant={
-                  activeView.type === 'smart' && activeView.id === 'important'
-                }
-                defaultDueDate={
-                  activeView.type === 'smart' && activeView.id === 'today'
-                    ? todayStr
-                    : null
-                }
-                onAdd={handleAddTodo}
-              />
-            )}
-
-            {/* Filter & Sort Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              {!isCompletedView ? (
-                <div
-                  role="tablist"
-                  aria-label="Durum filtresi"
-                  className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-1"
-                >
-                  {(
-                    [
-                      { id: 'all', label: 'Tümü' },
-                      { id: 'active', label: 'Aktif' },
-                      { id: 'completed', label: 'Tamamlanan' },
-                    ] as const
-                  ).map((tab) => {
-                    const active = statusFilter === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        onClick={() => setStatusFilter(tab.id)}
-                        className={`rounded-md px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
-                          active
-                            ? 'bg-[var(--surface)] text-[var(--text-primary)] shadow-xs border border-[var(--border)]'
-                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div />
+              {/* Quick Add Bar */}
+              {!isCompletedView && (
+                <QuickAddBar
+                  inputRef={quickAddRef}
+                  categories={categories}
+                  todayStr={todayStr}
+                  defaultCategoryId={
+                    activeView.type === 'category' ? activeView.id : null
+                  }
+                  defaultImportant={
+                    activeView.type === 'smart' && activeView.id === 'important'
+                  }
+                  defaultDueDate={
+                    activeView.type === 'smart' && activeView.id === 'today'
+                      ? todayStr
+                      : null
+                  }
+                  onAdd={handleAddTodo}
+                />
               )}
 
-              <div className="flex items-center gap-3 ml-auto">
-                {completedCountInView > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => void handleClearCompleted()}
-                    className="text-xs font-medium text-[var(--text-muted)] hover:text-red-600 dark:hover:text-red-400 transition-colors whitespace-nowrap"
+              {/* Filter & Sort Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                {!isCompletedView ? (
+                  <div
+                    role="tablist"
+                    aria-label={t.filterAll}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-1"
                   >
-                    Tamamlananları Temizle
-                  </button>
+                    {(
+                      [
+                        { id: 'all', label: t.filterAll },
+                        { id: 'active', label: t.filterActive },
+                        { id: 'completed', label: t.filterCompleted },
+                      ] as const
+                    ).map((tab) => {
+                      const active = statusFilter === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setStatusFilter(tab.id)}
+                          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                            active
+                              ? 'bg-[var(--surface)] text-[var(--text-primary)] shadow-xs border border-[var(--border)]'
+                              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div />
                 )}
 
-                <label className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                  <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  <span className="sr-only">Sıralama</span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    aria-label="Görev sıralaması"
-                    className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] transition-colors focus:border-[var(--border-strong)] focus:outline-none cursor-pointer"
-                  >
-                    <option value="manual">Özel Sıra</option>
-                    <option value="priority">Öncelik</option>
-                    <option value="dueDate">Son Tarih</option>
-                    <option value="newest">En Yeni</option>
-                  </select>
-                </label>
-              </div>
-            </div>
+                <div className="flex items-center gap-3 ml-auto">
+                  {completedCountInView > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void handleClearCompleted()}
+                      className="text-xs font-medium text-[var(--text-muted)] hover:text-red-600 dark:hover:text-red-400 transition-colors whitespace-nowrap"
+                    >
+                      {t.clearCompleted}
+                    </button>
+                  )}
 
-            {/* Error State */}
-            {loadError && (
-              <div
-                role="alert"
-                className="flex items-center justify-between gap-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300"
-              >
-                <span>{loadError}</span>
-                <button
-                  type="button"
-                  onClick={() => void loadData()}
-                  className="rounded-md border border-current px-3 py-1 text-xs font-medium whitespace-nowrap"
-                >
-                  Tekrar Dene
-                </button>
-              </div>
-            )}
-
-            {/* Loading Skeleton */}
-            {isLoading ? (
-              <div
-                aria-busy="true"
-                aria-label="Görevler yükleniyor"
-                className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
-              >
-                {[0, 1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 px-4 py-4 border-b border-[var(--border)] last:border-b-0"
-                  >
-                    <div className="h-5 w-5 rounded-full bg-[var(--surface-hover)] animate-pulse" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-2/3 rounded bg-[var(--surface-hover)] animate-pulse" />
-                      <div className="h-3 w-1/3 rounded bg-[var(--surface-subtle)] animate-pulse" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : visibleTodos.length === 0 ? (
-              /* Clean Empty State */
-              <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-14 text-center">
-                <div
-                  className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl"
-                  style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
-                >
-                  <CheckCheck className="h-5 w-5" />
+                  <label className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                    <span className="sr-only">{t.sortCustom}</span>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as SortOption)}
+                      aria-label={t.sortCustom}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] transition-colors focus:border-[var(--border-strong)] focus:outline-none cursor-pointer"
+                    >
+                      <option value="manual">{t.sortCustom}</option>
+                      <option value="priority">{t.sortPriority}</option>
+                      <option value="dueDate">{t.sortDueDate}</option>
+                      <option value="newest">{t.sortNewest}</option>
+                    </select>
+                  </label>
                 </div>
-                <h2 className="font-display text-base font-semibold text-[var(--text-primary)]">
-                  {searchQuery.trim()
-                    ? 'Eşleşen görev bulunamadı'
-                    : isCompletedView
-                      ? 'Henüz tamamlanan görev yok'
-                      : 'Bu liste şu an boş'}
-                </h2>
-                <p className="mt-1 max-w-sm text-sm text-[var(--text-muted)]">
-                  {searchQuery.trim()
-                    ? `"${searchQuery}" aramasına uygun kayıt bulunamadı.`
-                    : isCompletedView
-                      ? 'Tamamladığınız görevler burada listelenir.'
-                      : 'Yukarıdaki alana yazıp Enter’a basarak ilk görevinizi anında ekleyebilirsiniz.'}
-                </p>
-                {searchQuery.trim() ? (
+              </div>
+
+              {/* Error State */}
+              {loadError && (
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300"
+                >
+                  <span>{loadError}</span>
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-4 py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors"
+                    onClick={() => void loadData()}
+                    className="rounded-md border border-current px-3 py-1 text-xs font-medium whitespace-nowrap"
                   >
-                    Aramayı Temizle
+                    {t.retry}
                   </button>
-                ) : !isCompletedView ? (
-                  <button
-                    type="button"
-                    onClick={() => quickAddRef.current?.focus()}
-                    className="mt-4 rounded-lg px-4 py-2 text-xs font-medium transition-opacity"
-                    style={{ backgroundColor: 'var(--accent)', color: 'var(--accent-fg)' }}
+                </div>
+              )}
+
+              {/* Loading Skeleton */}
+              {isLoading ? (
+                <div
+                  aria-busy="true"
+                  aria-label="Agendamea"
+                  className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
+                >
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 px-4 py-4 border-b border-[var(--border)] last:border-b-0"
+                    >
+                      <div className="h-5 w-5 rounded-full bg-[var(--surface-hover)] animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-2/3 rounded bg-[var(--surface-hover)] animate-pulse" />
+                        <div className="h-3 w-1/3 rounded bg-[var(--surface-subtle)] animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : visibleTodos.length === 0 ? (
+                /* Clean Empty State */
+                <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-14 text-center">
+                  <div
+                    className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
                   >
-                    İlk Görevi Ekle
-                  </button>
-                ) : null}
-              </div>
-            ) : (
-              /* Flat Single-Container Task List */
-              <div
-                data-testid="todo-list"
-                className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
-              >
-                {visibleTodos.map((todo) => (
-                  <TodoItem
-                    key={todo.id}
-                    todo={todo}
-                    category={
-                      todo.categoryId ? categoryMap.get(todo.categoryId) : undefined
-                    }
-                    todayStr={todayStr}
-                    isSelected={selectedTodoId === todo.id}
-                    canDrag={canDragTodos}
-                    isDragging={draggedTodoId === todo.id}
-                    dropIndicator={
-                      todoDropTarget && todoDropTarget.id === todo.id
-                        ? todoDropTarget.position
-                        : null
-                    }
-                    onSelect={handleSelectTodo}
-                    onToggleComplete={handleToggleTodoComplete}
-                    onToggleImportant={handleToggleTodoImportant}
-                    onTogglePin={handleToggleTodoPin}
-                    onDelete={handleDeleteTodo}
-                    onDragStart={handleTodoDragStart}
-                    onDragOver={handleTodoDragOver}
-                    onDragLeave={handleTodoDragLeave}
-                    onDrop={handleTodoDrop}
-                    onDragEnd={handleTodoDragEnd}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </main>
+                    <CheckCheck className="h-5 w-5" />
+                  </div>
+                  <h2 className="font-display text-base font-semibold text-[var(--text-primary)]">
+                    {searchQuery.trim()
+                      ? t.emptySearchTitle
+                      : isCompletedView
+                        ? t.emptyCompletedTitle
+                        : t.emptyListTitle}
+                  </h2>
+                  <p className="mt-1 max-w-sm text-sm text-[var(--text-muted)]">
+                    {searchQuery.trim()
+                      ? t.emptySearchDesc
+                      : isCompletedView
+                        ? t.emptyCompletedDesc
+                        : t.emptyListDesc}
+                  </p>
+                  {searchQuery.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-4 py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors"
+                    >
+                      {t.clearSearch}
+                    </button>
+                  ) : !isCompletedView ? (
+                    <button
+                      type="button"
+                      onClick={() => quickAddRef.current?.focus()}
+                      className="mt-4 rounded-lg px-4 py-2 text-xs font-medium transition-opacity"
+                      style={{ backgroundColor: 'var(--accent)', color: 'var(--accent-fg)' }}
+                    >
+                      {t.addFirstTaskButton}
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                /* Flat Single-Container Task List */
+                <div
+                  data-testid="todo-list"
+                  className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
+                >
+                  {visibleTodos.map((todo) => (
+                    <TodoItem
+                      key={todo.id}
+                      todo={todo}
+                      category={
+                        todo.categoryId ? categoryMap.get(todo.categoryId) : undefined
+                      }
+                      todayStr={todayStr}
+                      isSelected={selectedTodoId === todo.id}
+                      canDrag={canDragTodos}
+                      isDragging={draggedTodoId === todo.id}
+                      dropIndicator={
+                        todoDropTarget && todoDropTarget.id === todo.id
+                          ? todoDropTarget.position
+                          : null
+                      }
+                      onSelect={handleSelectTodo}
+                      onToggleComplete={handleToggleTodoComplete}
+                      onToggleImportant={handleToggleTodoImportant}
+                      onTogglePin={handleToggleTodoPin}
+                      onDelete={handleDeleteTodo}
+                      onDragStart={handleTodoDragStart}
+                      onDragOver={handleTodoDragOver}
+                      onDragLeave={handleTodoDragLeave}
+                      onDrop={handleTodoDrop}
+                      onDragEnd={handleTodoDragEnd}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </main>
+        </div>
+
+        {/* Right Detail Inspector Panel */}
+        {selectedTodo && (
+          <>
+            <button
+              type="button"
+              aria-label={t.closeMenu}
+              onClick={handleCloseDetail}
+              className="fixed inset-0 z-20 bg-black/35 lg:hidden"
+            />
+            <TodoDetailPanel
+              todo={selectedTodo}
+              categories={categories}
+              todayStr={todayStr}
+              onClose={handleCloseDetail}
+              onUpdate={handleUpdateTodo}
+              onDelete={handleDeleteTodo}
+              onAddSubtask={handleAddSubtask}
+              onToggleSubtask={handleToggleSubtask}
+              onDeleteSubtask={handleDeleteSubtask}
+            />
+          </>
+        )}
+
+        <ToastContainer
+          undoToast={undoToast}
+          infoToast={infoToast}
+          onUndo={handleUndoClick}
+          onClearUndo={clearUndoToast}
+          onClearInfo={clearInfoToast}
+        />
+
+        {/* Lazy-Loaded Settings Modal */}
+        {isSettingsOpen && (
+          <Suspense fallback={null}>
+            <SettingsModal
+              onClose={handleCloseSettings}
+              themeMode={themeMode}
+              themeId={themeId}
+              dragLocked={dragLocked}
+              onChangeMode={handleModeChange}
+              onChangeTheme={handleThemeChange}
+              onToggleDragLock={handleToggleDragLock}
+              autoUpdateCheck={autoUpdateCheck}
+              onToggleAutoUpdateCheck={handleToggleAutoUpdateCheck}
+              updateState={updateState}
+              onCheckForUpdates={handleManualCheckForUpdates}
+              onDownloadAndInstall={handleDownloadAndInstallUpdate}
+              totalTodoCount={todos.length}
+              completedTodoCount={counts.smart.completed}
+              onClearAllCompleted={handleClearAllCompleted}
+              onImportBackup={handleImportBackup}
+              trashedCategories={trashedCategories}
+              trashedTodos={trashedTodos}
+              onRestoreTodo={handleRestoreTodo}
+              onPermanentDeleteTodo={handlePermanentDeleteTodo}
+              onRestoreCategory={handleRestoreCategory}
+              onPermanentDeleteCategory={handlePermanentDeleteCategory}
+              onEmptyTrash={handleEmptyTrash}
+            />
+          </Suspense>
+        )}
+
+        <OfflineIndicator />
+
+        <div className="app-no-drag fixed top-2 right-2.5 z-[60]">
+          <WindowControls onNotify={handleWindowNotify} />
+        </div>
       </div>
-
-      {/* Right Detail Inspector Panel */}
-      {selectedTodo && (
-        <>
-          <button
-            type="button"
-            aria-label="Detay paneli arka planını kapat"
-            onClick={handleCloseDetail}
-            className="fixed inset-0 z-20 bg-black/35 lg:hidden"
-          />
-          <TodoDetailPanel
-            todo={selectedTodo}
-            categories={categories}
-            todayStr={todayStr}
-            onClose={handleCloseDetail}
-            onUpdate={handleUpdateTodo}
-            onDelete={handleDeleteTodo}
-            onAddSubtask={handleAddSubtask}
-            onToggleSubtask={handleToggleSubtask}
-            onDeleteSubtask={handleDeleteSubtask}
-          />
-        </>
-      )}
-
-      <ToastContainer
-        undoToast={undoToast}
-        infoToast={infoToast}
-        onUndo={handleUndoClick}
-        onClearUndo={clearUndoToast}
-        onClearInfo={clearInfoToast}
-      />
-
-      {/* Lazy-Loaded Settings Modal (Theme, Mode, Drag Lock, SQLite Backup/Import, Trash & Shortcuts) */}
-      {isSettingsOpen && (
-        <Suspense fallback={null}>
-          <SettingsModal
-            onClose={handleCloseSettings}
-            themeMode={themeMode}
-            themeId={themeId}
-            dragLocked={dragLocked}
-            onChangeMode={handleModeChange}
-            onChangeTheme={handleThemeChange}
-            onToggleDragLock={handleToggleDragLock}
-            totalTodoCount={todos.length}
-            completedTodoCount={counts.smart.completed}
-            onClearAllCompleted={handleClearAllCompleted}
-            onImportBackup={handleImportBackup}
-            trashedCategories={trashedCategories}
-            trashedTodos={trashedTodos}
-            onRestoreTodo={handleRestoreTodo}
-            onPermanentDeleteTodo={handlePermanentDeleteTodo}
-            onRestoreCategory={handleRestoreCategory}
-            onPermanentDeleteCategory={handlePermanentDeleteCategory}
-            onEmptyTrash={handleEmptyTrash}
-          />
-        </Suspense>
-      )}
-
-      <OfflineIndicator />
-
-      {/* Ultra-minimal floating Windows 10/11 Window Controls at top-right (mounted last & above drag strips) */}
-      <div className="app-no-drag fixed top-2 right-2.5 z-[60]">
-        <WindowControls onNotify={handleWindowNotify} />
-      </div>
-    </div>
+    </I18nProvider>
   );
 }

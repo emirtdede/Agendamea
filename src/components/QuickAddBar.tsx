@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Check, ChevronDown, Flag, Folder, Plus } from 'lucide-react';
+import { Calendar, CalendarRange, Check, ChevronDown, Flag, Folder, Plus, X } from 'lucide-react';
+import { useI18n } from '../i18n/I18nContext';
 import type { Category, Priority } from '../types';
 import { createClientId } from '../utils/id';
-import { addDaysToDateString, getPriorityLabel } from '../utils/todoLogic';
+import {
+  addDaysToDateString,
+  formatTodoDateSchedule,
+  normalizeDateRange,
+} from '../utils/todoLogic';
 import { ColorDot } from './ColorDot';
 
 interface QuickAddBarProps {
@@ -16,6 +21,7 @@ interface QuickAddBarProps {
     id?: string;
     title: string;
     priority: Priority;
+    startDate?: string | null;
     dueDate: string | null;
     categoryId: string | null;
     important: boolean;
@@ -33,14 +39,18 @@ export const QuickAddBar = React.memo(function QuickAddBar({
   defaultDueDate,
   onAdd,
 }: QuickAddBarProps) {
+  const { t, meta } = useI18n();
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Priority>('normal');
+  const [startDate, setStartDate] = useState<string | null>(null);
   const [dueDateOverride, setDueDateOverride] = useState<string | null | undefined>(undefined);
   const [categoryOverride, setCategoryOverride] = useState<string | null | undefined>(undefined);
   const [isCatMenuOpen, setIsCatMenuOpen] = useState(false);
+  const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const catMenuRef = useRef<HTMLDivElement>(null);
+  const datePopoverRef = useRef<HTMLDivElement>(null);
   const isSubmittingRef = useRef(false);
   const pendingTodoIdRef = useRef<string | null>(null);
 
@@ -51,6 +61,7 @@ export const QuickAddBar = React.memo(function QuickAddBar({
 
   useEffect(() => {
     setDueDateOverride(undefined);
+    setStartDate(null);
   }, [defaultDueDate]);
 
   const effectiveCategoryId =
@@ -64,16 +75,24 @@ export const QuickAddBar = React.memo(function QuickAddBar({
   );
 
   useEffect(() => {
-    if (!isCatMenuOpen) return;
+    if (!isCatMenuOpen && !isDatePopoverOpen) return;
     const handleOutside = (e: MouseEvent) => {
-      if (catMenuRef.current && !catMenuRef.current.contains(e.target as Node)) {
+      if (isCatMenuOpen && catMenuRef.current && !catMenuRef.current.contains(e.target as Node)) {
         setIsCatMenuOpen(false);
+      }
+      if (
+        isDatePopoverOpen &&
+        datePopoverRef.current &&
+        !datePopoverRef.current.contains(e.target as Node)
+      ) {
+        setIsDatePopoverOpen(false);
       }
     };
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         setIsCatMenuOpen(false);
+        setIsDatePopoverOpen(false);
       }
     };
     document.addEventListener('mousedown', handleOutside);
@@ -82,7 +101,7 @@ export const QuickAddBar = React.memo(function QuickAddBar({
       document.removeEventListener('mousedown', handleOutside);
       document.removeEventListener('keydown', handleEsc);
     };
-  }, [isCatMenuOpen]);
+  }, [isCatMenuOpen, isDatePopoverOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,19 +115,24 @@ export const QuickAddBar = React.memo(function QuickAddBar({
     const id = pendingTodoIdRef.current ?? createClientId('todo');
     pendingTodoIdRef.current = id;
 
+    const normalizedDates = normalizeDateRange(startDate, effectiveDueDate);
+
     try {
       await onAdd({
         id,
         title: trimmed,
         priority,
-        dueDate: effectiveDueDate || null,
+        startDate: normalizedDates.startDate,
+        dueDate: normalizedDates.dueDate,
         categoryId: effectiveCategoryId,
         important: defaultImportant,
       });
       setTitle('');
       setPriority('normal');
+      setStartDate(null);
       setDueDateOverride(undefined);
       setCategoryOverride(undefined);
+      setIsDatePopoverOpen(false);
       pendingTodoIdRef.current = null;
     } catch {
       // Keep title and pendingTodoIdRef for safe idempotent retry
@@ -126,23 +150,35 @@ export const QuickAddBar = React.memo(function QuickAddBar({
   const tomorrowStr = useMemo(() => addDaysToDateString(todayStr, 1), [todayStr]);
 
   const cycleQuickDate = () => {
-    if (!effectiveDueDate) {
+    if (!effectiveDueDate && !startDate) {
       setDueDateOverride(todayStr);
-    } else if (effectiveDueDate === todayStr) {
+    } else if (effectiveDueDate === todayStr && !startDate) {
       setDueDateOverride(tomorrowStr);
     } else {
+      setStartDate(null);
       setDueDateOverride(null);
     }
   };
 
-  const dateLabel =
-    effectiveDueDate === todayStr
-      ? 'Bugün'
-      : effectiveDueDate === tomorrowStr
-        ? 'Yarın'
-        : effectiveDueDate
-          ? effectiveDueDate
-          : 'Tarih';
+  const scheduleInfo = useMemo(
+    () =>
+      formatTodoDateSchedule(startDate, effectiveDueDate, todayStr, meta.intlLocale, {
+        today: t.today,
+        tomorrow: t.tomorrow,
+        yesterday: t.yesterday,
+      }),
+    [startDate, effectiveDueDate, todayStr, meta.intlLocale, t.today, t.tomorrow, t.yesterday],
+  );
+
+  const dateLabel = scheduleInfo ? scheduleInfo.label : t.dateButton;
+  const hasAnyDate = Boolean(startDate || effectiveDueDate);
+
+  const priorityText =
+    priority === 'high'
+      ? t.priorityHigh
+      : priority === 'low'
+        ? t.priorityLow
+        : t.priorityNormal;
 
   return (
     <form
@@ -157,8 +193,8 @@ export const QuickAddBar = React.memo(function QuickAddBar({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={300}
-          placeholder="Yeni görev ekle..."
-          aria-label="Yeni görev ekle"
+          placeholder={t.addTaskPlaceholder}
+          aria-label={t.addTaskPlaceholder}
           className="flex-1 min-w-0 bg-transparent text-[15px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
         />
         <button
@@ -167,32 +203,145 @@ export const QuickAddBar = React.memo(function QuickAddBar({
           className="rounded-lg px-4 py-1.5 text-sm font-medium transition-opacity disabled:opacity-35 whitespace-nowrap shrink-0"
           style={{ backgroundColor: 'var(--accent)', color: 'var(--accent-fg)' }}
         >
-          Ekle
+          {t.addButton}
         </button>
       </div>
 
       {/* Subtle compact quick options bar */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--border)] bg-[var(--surface-subtle)]/60 px-4 py-2 text-xs rounded-b-xl">
-        {/* Quick Due Date */}
-        <button
-          type="button"
-          onClick={cycleQuickDate}
-          aria-label={`Son tarih seç: şu an ${dateLabel}`}
-          className={`inline-flex items-center gap-1.5 py-0.5 font-medium transition-colors whitespace-nowrap ${
-            effectiveDueDate
-              ? 'text-[var(--accent)]'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          <Calendar className="h-3.5 w-3.5 shrink-0" />
-          <span>{dateLabel}</span>
-        </button>
+        {/* Quick Date Cycle + Optional Start/End Date Popover */}
+        <div ref={datePopoverRef} className="relative inline-flex items-center gap-1">
+          <button
+            type="button"
+            onClick={cycleQuickDate}
+            aria-label={`${t.dateButton}: ${dateLabel}`}
+            className={`inline-flex items-center gap-1.5 py-0.5 font-medium transition-colors whitespace-nowrap ${
+              hasAnyDate
+                ? 'text-[var(--accent)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <Calendar className="h-3.5 w-3.5 shrink-0" />
+            <span>{dateLabel}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsDatePopoverOpen((prev) => !prev)}
+            aria-expanded={isDatePopoverOpen}
+            aria-label={`${t.startDateLabel} - ${t.dueDateLabel}`}
+            title={`${t.startDateLabel} / ${t.dueDateLabel}`}
+            className={`inline-flex h-5 w-5 items-center justify-center rounded transition-colors ${
+              isDatePopoverOpen || (startDate && effectiveDueDate)
+                ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                : 'text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <CalendarRange className="h-3.5 w-3.5" />
+          </button>
+
+          {isDatePopoverOpen && (
+            <div
+              role="dialog"
+              aria-label={`${t.startDateLabel} - ${t.dueDateLabel}`}
+              className="absolute left-0 top-7 z-30 w-64 rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] p-3 shadow-lg space-y-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-display text-xs font-semibold text-[var(--text-primary)]">
+                  {t.dateButton}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsDatePopoverOpen(false)}
+                  aria-label={t.closeMenu}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate(null);
+                    setDueDateOverride(todayStr);
+                  }}
+                  className={`rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                    !startDate && effectiveDueDate === todayStr
+                      ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                      : 'border-[var(--border)] bg-[var(--canvas)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
+                  }`}
+                >
+                  {t.today}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate(null);
+                    setDueDateOverride(tomorrowStr);
+                  }}
+                  className={`rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                    !startDate && effectiveDueDate === tomorrowStr
+                      ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                      : 'border-[var(--border)] bg-[var(--canvas)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
+                  }`}
+                >
+                  {t.tomorrow}
+                </button>
+                {hasAnyDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStartDate(null);
+                      setDueDateOverride(null);
+                    }}
+                    className="ml-auto rounded-md px-2 py-1 text-[11px] font-medium text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]"
+                  >
+                    {t.clearDate}
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-[var(--text-muted)]">
+                    {t.startDateLabel}
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate ?? ''}
+                    onChange={(e) => setStartDate(e.target.value || null)}
+                    aria-label={t.startDateLabel}
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-strong)] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-[var(--text-muted)]">
+                    {t.dueDateLabel}
+                  </label>
+                  <input
+                    type="date"
+                    value={effectiveDueDate ?? ''}
+                    onChange={(e) => setDueDateOverride(e.target.value || null)}
+                    aria-label={t.dueDateLabel}
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-strong)] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] leading-snug text-[var(--text-muted)]">
+                {t.optionalDateHint}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Quick Priority */}
         <button
           type="button"
           onClick={cyclePriority}
-          aria-label={`Öncelik değiştir: şu an ${getPriorityLabel(priority)}`}
+          aria-label={`${t.priorityLabel}: ${priorityText}`}
           className={`inline-flex items-center gap-1.5 py-0.5 font-medium transition-colors whitespace-nowrap ${
             priority === 'high'
               ? 'text-red-600 dark:text-red-400'
@@ -202,7 +351,9 @@ export const QuickAddBar = React.memo(function QuickAddBar({
           }`}
         >
           <Flag className="h-3.5 w-3.5 shrink-0" />
-          <span>Öncelik: {getPriorityLabel(priority)}</span>
+          <span>
+            {t.priorityLabel}: {priorityText}
+          </span>
         </button>
 
         {/* Clean Custom Category Dropdown */}
@@ -213,7 +364,7 @@ export const QuickAddBar = React.memo(function QuickAddBar({
               onClick={() => setIsCatMenuOpen((prev) => !prev)}
               aria-expanded={isCatMenuOpen}
               aria-haspopup="listbox"
-              aria-label={`Yeni görev kategorisi: ${selectedCategory?.name ?? 'Kategorisiz'}`}
+              aria-label={`${t.categories}: ${selectedCategory?.name ?? t.uncategorized}`}
               className="inline-flex items-center gap-1.5 py-0.5 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
             >
               {selectedCategory ? (
@@ -222,7 +373,7 @@ export const QuickAddBar = React.memo(function QuickAddBar({
                 <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
               )}
               <span className="max-w-[120px] truncate">
-                {selectedCategory?.name ?? 'Kategorisiz'}
+                {selectedCategory?.name ?? t.uncategorized}
               </span>
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
             </button>
@@ -230,7 +381,7 @@ export const QuickAddBar = React.memo(function QuickAddBar({
             {isCatMenuOpen && (
               <div
                 role="listbox"
-                aria-label="Kategori listesi"
+                aria-label={t.categories}
                 className="absolute left-0 top-7 z-30 min-w-[176px] rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] p-1 shadow-lg"
               >
                 <button
@@ -247,7 +398,7 @@ export const QuickAddBar = React.memo(function QuickAddBar({
                       : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  <span>Kategorisiz</span>
+                  <span>{t.uncategorized}</span>
                   {effectiveCategoryId === null && (
                     <Check className="h-3 w-3 text-[var(--accent)]" />
                   )}
@@ -286,7 +437,7 @@ export const QuickAddBar = React.memo(function QuickAddBar({
         )}
 
         <span className="ml-auto hidden sm:inline text-[11px] text-[var(--text-muted)]">
-          Anlık SQLite kaydı
+          {t.instantSaveBadge}
         </span>
       </div>
     </form>

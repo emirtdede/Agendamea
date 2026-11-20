@@ -7,6 +7,11 @@ interface NativeWindowBridge {
   close?: () => void | Promise<void>;
   isMaximized?: () => Promise<boolean> | boolean;
   onMaximizedChange?: (cb: (isMaximized: boolean) => void) => (() => void) | void;
+  checkForUpdates?: () => Promise<import('../types').UpdateCheckResult>;
+  downloadAndInstallUpdate?: (
+    url: string,
+  ) => Promise<{ ok: boolean; launchedInstaller?: boolean; launchedExternal?: boolean }>;
+  onUpdateProgress?: (cb: (percent: number) => void) => (() => void) | void;
 }
 
 declare global {

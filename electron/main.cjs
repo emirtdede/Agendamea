@@ -312,9 +312,171 @@ ipcMain.handle('window:is-maximized', (event) => {
   return win.isMaximized() || win.isFullScreen();
 });
 
+const GITHUB_RELEASES_API = 'https://api.github.com/repos/emirtdede/Agendamea/releases/latest';
+const GITHUB_RELEASES_HTML = 'https://github.com/emirtdede/Agendamea/releases/latest';
+
+function compareSemver(a, b) {
+  const cleanA = String(a || '').trim().replace(/^v/i, '').split('-')[0];
+  const cleanB = String(b || '').trim().replace(/^v/i, '').split('-')[0];
+  const partsA = cleanA.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const partsB = cleanB.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const len = Math.max(partsA.length, partsB.length, 3);
+  for (let i = 0; i < len; i += 1) {
+    const va = partsA[i] || 0;
+    const vb = partsB[i] || 0;
+    if (va > vb) return 1;
+    if (va < vb) return -1;
+  }
+  return 0;
+}
+
+function isAllowedUpdateDownloadUrl(targetUrl) {
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== 'https:') return false;
+    if (
+      parsed.hostname === 'github.com' &&
+      parsed.pathname.startsWith('/emirtdede/Agendamea/releases/download/') &&
+      parsed.pathname.toLowerCase().endsWith('.exe')
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 ipcMain.handle('window:close', (event) => {
   const win = resolveSenderWindow(event);
   win?.close();
+});
+
+ipcMain.handle('updater:check', async () => {
+  const currentVersion = app.getVersion() || '1.0.0';
+  const checkedAt = new Date().toISOString();
+  try {
+    const res = await fetch(GITHUB_RELEASES_API, {
+      signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(8000) : undefined,
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': `Agendamea/${currentVersion} (Vellium)`,
+      },
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        currentVersion,
+        latestVersion: currentVersion,
+        updateAvailable: false,
+        releaseName: `Agendamea v${currentVersion}`,
+        releaseNotes: '',
+        publishedAt: null,
+        releaseUrl: GITHUB_RELEASES_HTML,
+        setupUrl: null,
+        portableUrl: null,
+        checkedAt,
+      };
+    }
+    const data = await res.json();
+    const latestVersion = String(data?.tag_name || currentVersion).replace(/^v/i, '') || currentVersion;
+    const updateAvailable = compareSemver(latestVersion, currentVersion) > 0;
+    const assets = Array.isArray(data?.assets) ? data.assets : [];
+    const setupAsset = assets.find(
+      (a) => typeof a?.name === 'string' && /^Agendamea-Setup-.*\.exe$/i.test(a.name),
+    );
+    const portableAsset = assets.find(
+      (a) => typeof a?.name === 'string' && /^Agendamea-Portable-.*\.exe$/i.test(a.name),
+    );
+    return {
+      ok: true,
+      currentVersion,
+      latestVersion,
+      updateAvailable,
+      releaseName:
+        typeof data?.name === 'string' && data.name ? data.name : `Agendamea v${latestVersion}`,
+      releaseNotes: typeof data?.body === 'string' ? data.body.slice(0, 4000) : '',
+      publishedAt: typeof data?.published_at === 'string' ? data.published_at : null,
+      releaseUrl:
+        typeof data?.html_url === 'string' && data.html_url ? data.html_url : GITHUB_RELEASES_HTML,
+      setupUrl:
+        typeof setupAsset?.browser_download_url === 'string'
+          ? setupAsset.browser_download_url
+          : null,
+      portableUrl:
+        typeof portableAsset?.browser_download_url === 'string'
+          ? portableAsset.browser_download_url
+          : null,
+      checkedAt,
+    };
+  } catch {
+    return {
+      ok: false,
+      currentVersion,
+      latestVersion: currentVersion,
+      updateAvailable: false,
+      releaseName: `Agendamea v${currentVersion}`,
+      releaseNotes: '',
+      publishedAt: null,
+      releaseUrl: GITHUB_RELEASES_HTML,
+      setupUrl: null,
+      portableUrl: null,
+      checkedAt,
+    };
+  }
+});
+
+ipcMain.handle('updater:download-and-install', async (event, downloadUrl) => {
+  const win = resolveSenderWindow(event);
+  if (typeof downloadUrl !== 'string' || !isAllowedUpdateDownloadUrl(downloadUrl)) {
+    void shell.openExternal(GITHUB_RELEASES_HTML);
+    return { ok: true, launchedExternal: true };
+  }
+
+  const tempFilePath = path.join(app.getPath('temp'), 'Agendamea-Setup-Update.exe');
+  try {
+    const res = await fetch(downloadUrl, {
+      headers: { 'User-Agent': `Agendamea/${app.getVersion() || '1.0.0'} (Vellium)` },
+    });
+    if (!res.ok || !res.body) {
+      void shell.openExternal(downloadUrl);
+      return { ok: true, launchedExternal: true };
+    }
+
+    const totalBytes = Number(res.headers.get('content-length') || 0);
+    let receivedBytes = 0;
+    const fileStream = fs.createWriteStream(tempFilePath);
+    const reader = res.body.getReader();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        receivedBytes += value.byteLength;
+        fileStream.write(Buffer.from(value));
+        if (totalBytes > 0 && win && !win.isDestroyed()) {
+          const pct = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
+          win.webContents.send('updater:progress', pct);
+        }
+      }
+    }
+
+    await new Promise((resolve, reject) => {
+      fileStream.end((err) => (err ? reject(err) : resolve()));
+    });
+
+    const child = spawn(tempFilePath, [], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    stopBackend();
+    app.quit();
+    return { ok: true, launchedInstaller: true };
+  } catch {
+    void shell.openExternal(downloadUrl);
+    return { ok: true, launchedExternal: true };
+  }
 });
 
 app

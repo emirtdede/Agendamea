@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useDelayedFocus } from '../hooks/useDelayedFocus';
+import { useI18n } from '../i18n/I18nContext';
 import type { ActiveView, Category, CategoryPatch, SmartView } from '../types';
 import { createClientId } from '../utils/id';
 import { CATEGORY_COLORS } from '../utils/themes';
@@ -65,17 +66,6 @@ interface SidebarProps {
   onCloseMobile: () => void;
 }
 
-const SMART_ITEMS: Array<{
-  id: SmartView;
-  label: string;
-  Icon: React.ComponentType<{ className?: string }>;
-}> = [
-  { id: 'all', label: 'Tüm Görevler', Icon: Inbox },
-  { id: 'today', label: 'Bugün', Icon: Sun },
-  { id: 'important', label: 'Önemli', Icon: Star },
-  { id: 'completed', label: 'Tamamlananlar', Icon: CheckCircle2 },
-];
-
 export const Sidebar = React.memo(function Sidebar({
   activeView,
   onSelectView,
@@ -96,6 +86,7 @@ export const Sidebar = React.memo(function Sidebar({
   isOpenMobile,
   onCloseMobile,
 }: SidebarProps) {
+  const { t } = useI18n();
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -115,11 +106,24 @@ export const Sidebar = React.memo(function Sidebar({
   const editInputRef = useRef<HTMLInputElement>(null);
   const scheduleFocus = useDelayedFocus();
 
-  // Synchronous submission locks prevent duplicate records on rapid multi-clicks
   const isCreatingRef = useRef(false);
   const pendingCreateIdRef = useRef<string | null>(null);
   const isEditingRef = useRef(false);
   const isDeletingRef = useRef(false);
+
+  const smartItems: Array<{
+    id: SmartView;
+    label: string;
+    Icon: React.ComponentType<{ className?: string }>;
+  }> = useMemo(
+    () => [
+      { id: 'all', label: t.allTasks, Icon: Inbox },
+      { id: 'today', label: t.today, Icon: Sun },
+      { id: 'important', label: t.important, Icon: Star },
+      { id: 'completed', label: t.completed, Icon: CheckCircle2 },
+    ],
+    [t.allTasks, t.today, t.important, t.completed],
+  );
 
   const { pinnedCount, unpinnedCount } = useMemo(() => {
     let pinned = 0;
@@ -240,7 +244,7 @@ export const Sidebar = React.memo(function Sidebar({
 
   const renderSidebar = (compact: boolean) => (
     <aside
-      aria-label="Ana menü ve kategoriler"
+      aria-label="Agendamea"
       data-collapsed={compact ? 'true' : 'false'}
       className={`flex h-full shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] select-none transition-[width] duration-200 ease-out ${
         compact ? 'w-[68px]' : 'w-[264px]'
@@ -252,8 +256,8 @@ export const Sidebar = React.memo(function Sidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            aria-label="Kenar menüsünü genişlet"
-            title="Agendamea — Menüyü genişlet"
+            aria-label={t.expandSidebar}
+            title={`Agendamea - ${t.expandSidebar}`}
             className="app-no-drag flex h-9 w-9 items-center justify-center rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
           >
             <BrandMark className="h-6 w-6" />
@@ -261,8 +265,8 @@ export const Sidebar = React.memo(function Sidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            aria-label="Kenar menüsünü aç"
-            title="Kenar menüsünü genişlet"
+            aria-label={t.expandSidebar}
+            title={t.expandSidebar}
             className="app-no-drag flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
           >
             <PanelLeftOpen className="h-4 w-4" />
@@ -280,8 +284,8 @@ export const Sidebar = React.memo(function Sidebar({
             <button
               type="button"
               onClick={onToggleCollapse}
-              aria-label="Kenar menüsünü minimal moda al"
-              title="Minimal menü"
+              aria-label={t.collapseSidebar}
+              title={t.collapseSidebar}
               className="hidden md:flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
             >
               <PanelLeftClose className="h-4 w-4" />
@@ -289,7 +293,7 @@ export const Sidebar = React.memo(function Sidebar({
             <button
               type="button"
               onClick={onCloseMobile}
-              aria-label="Menüyü kapat"
+              aria-label={t.closeMenu}
               className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] md:hidden"
             >
               <X className="h-4 w-4" />
@@ -298,14 +302,14 @@ export const Sidebar = React.memo(function Sidebar({
         </div>
       )}
 
-      {/* Search directly above "Tüm Görevler" */}
+      {/* Search directly above Smart Views */}
       <div className={compact ? 'px-2 pt-3 pb-1' : 'px-3 pt-3 pb-1'}>
         {compact ? (
           <button
             type="button"
             onClick={handleCollapsedSearchClick}
-            aria-label="Görevlerde ara"
-            title={searchQuery ? `Arama: ${searchQuery}` : 'Görevlerde ara (Ctrl+K)'}
+            aria-label={t.searchPlaceholder}
+            title={searchQuery ? `${t.searchPlaceholder} ${searchQuery}` : `${t.searchPlaceholder} (Ctrl+K)`}
             className={`mx-auto flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${
               searchQuery
                 ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
@@ -325,15 +329,15 @@ export const Sidebar = React.memo(function Sidebar({
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              aria-label="Görevlerde ara"
-              placeholder="Ara..."
+              aria-label={t.searchPlaceholder}
+              placeholder={t.searchPlaceholder}
               className="h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--canvas)] pl-8 pr-7 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:border-[var(--border-strong)] focus:outline-none"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => onSearchChange('')}
-                aria-label="Aramayı temizle"
+                aria-label={t.clearSearch}
                 className="absolute right-1.5 flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
                 <X className="h-3.5 w-3.5" />
@@ -350,8 +354,8 @@ export const Sidebar = React.memo(function Sidebar({
         }`}
       >
         {/* Smart Views */}
-        <nav aria-label="Akıllı görünümler" className="space-y-0.5">
-          {SMART_ITEMS.map(({ id, label, Icon }) => {
+        <nav aria-label={t.allTasks} className="space-y-0.5">
+          {smartItems.map(({ id, label, Icon }) => {
             const isActive = activeView.type === 'smart' && activeView.id === id;
             const count = counts.smart[id];
 
@@ -413,11 +417,11 @@ export const Sidebar = React.memo(function Sidebar({
         <div className="mx-2 h-px bg-[var(--border)]" />
 
         {/* Categories Section */}
-        <section aria-label="Kategoriler">
+        <section aria-label={t.categories}>
           {!compact && (
             <div className="mb-2 flex items-center justify-between px-3">
               <h2 className="font-display text-xs font-semibold tracking-wide text-[var(--text-muted)]">
-                Kategoriler
+                {t.categories}
               </h2>
               <button
                 type="button"
@@ -428,8 +432,8 @@ export const Sidebar = React.memo(function Sidebar({
                     openAddCategoryForm(false);
                   }
                 }}
-                aria-label="Yeni kategori oluştur"
-                title="Yeni Kategori"
+                aria-label={t.newCategory}
+                title={t.newCategory}
                 className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -457,7 +461,7 @@ export const Sidebar = React.memo(function Sidebar({
                     aria-current={isActive ? 'page' : undefined}
                     title={
                       cat.pinned
-                        ? `${cat.name} (Sabitlendi · ${count})`
+                        ? `${cat.name} (${t.pinLabel} · ${count})`
                         : `${cat.name} (${count})`
                     }
                     className={`relative mx-auto flex h-9 w-9 items-center justify-center rounded-lg transition-colors duration-150 ${
@@ -492,15 +496,15 @@ export const Sidebar = React.memo(function Sidebar({
                       onKeyDown={(e) => {
                         if (e.key === 'Escape') setEditingCatId(null);
                       }}
-                      aria-label="Kategori adını düzenle"
-                      placeholder="Kategori adı..."
+                      aria-label={t.categoryNamePlaceholder}
+                      placeholder={t.categoryNamePlaceholder}
                       maxLength={60}
                       className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                     />
                     <CategoryColorPicker
                       value={editCatColor}
                       onChange={setEditCatColor}
-                      ariaLabel="Kategori rengi"
+                      ariaLabel={t.colorThemeTitle}
                     />
                     <div className="flex items-center justify-end gap-1.5">
                       <button
@@ -508,7 +512,7 @@ export const Sidebar = React.memo(function Sidebar({
                         onClick={() => setEditingCatId(null)}
                         className="rounded-md px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
                       >
-                        İptal
+                        {t.cancelButton}
                       </button>
                       <button
                         type="submit"
@@ -516,7 +520,7 @@ export const Sidebar = React.memo(function Sidebar({
                         className="rounded-md px-2.5 py-1 text-xs font-medium transition-opacity disabled:opacity-40"
                         style={{ backgroundColor: 'var(--accent)', color: 'var(--accent-fg)' }}
                       >
-                        Uygula
+                        {t.applyButton}
                       </button>
                     </div>
                   </form>
@@ -530,7 +534,7 @@ export const Sidebar = React.memo(function Sidebar({
                     className="rounded-lg border border-[var(--border-strong)] bg-[var(--surface-subtle)] p-2.5 space-y-2"
                   >
                     <p className="text-xs text-[var(--text-primary)] leading-relaxed">
-                      <strong>{cat.name}</strong> çöp kutusuna taşınsın mı? Görevler korunur.
+                      <strong>{cat.name}</strong> {t.confirmMoveCategoryTrash}
                     </p>
                     <div className="flex items-center justify-end gap-1.5">
                       <button
@@ -538,14 +542,14 @@ export const Sidebar = React.memo(function Sidebar({
                         onClick={() => setConfirmDeleteId(null)}
                         className="rounded-md px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
                       >
-                        Vazgeç
+                        {t.cancelButton}
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleConfirmDelete(cat.id)}
                         className="rounded-md px-2.5 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700"
                       >
-                        Çöpe Taşı
+                        {t.deleteToTrashButton}
                       </button>
                     </div>
                   </div>
@@ -656,13 +660,9 @@ export const Sidebar = React.memo(function Sidebar({
                     <button
                       type="button"
                       onClick={() => void onTogglePinCategory(cat.id, !cat.pinned)}
-                      aria-label={
-                        cat.pinned
-                          ? `Kategori sabitlemesini kaldır: ${cat.name}`
-                          : `Kategoriyi sabitle: ${cat.name}`
-                      }
+                      aria-label={`${cat.pinned ? t.unpinLabel : t.pinLabel}: ${cat.name}`}
                       aria-pressed={cat.pinned}
-                      title={cat.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'}
+                      title={cat.pinned ? t.unpinLabel : t.pinLabel}
                       className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
                         cat.pinned
                           ? 'text-[var(--accent)] hover:bg-[var(--surface)]'
@@ -684,8 +684,7 @@ export const Sidebar = React.memo(function Sidebar({
                       <button
                         type="button"
                         onClick={() => startEditingCategory(cat)}
-                        aria-label={`Kategoriyi düzenle: ${cat.name}`}
-                        title="Düzenle"
+                        aria-label={cat.name}
                         className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text-primary)]"
                       >
                         <Pencil className="h-3 w-3" />
@@ -693,8 +692,8 @@ export const Sidebar = React.memo(function Sidebar({
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(cat.id)}
-                        aria-label={`Kategoriyi sil: ${cat.name}`}
-                        title="Çöpe taşı"
+                        aria-label={`${t.deleteToTrashButton}: ${cat.name}`}
+                        title={t.deleteToTrashButton}
                         className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-red-500"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -716,7 +715,7 @@ export const Sidebar = React.memo(function Sidebar({
 
             {!compact && categories.length === 0 && !isAddingCategory && (
               <p className="px-3 py-2 text-xs text-[var(--text-muted)]">
-                Henüz kategori yok.
+                {t.noCategoriesYet}
               </p>
             )}
           </div>
@@ -726,8 +725,8 @@ export const Sidebar = React.memo(function Sidebar({
             <button
               type="button"
               onClick={() => openAddCategoryForm(true)}
-              aria-label="Yeni kategori oluştur"
-              title="Yeni Kategori"
+              aria-label={t.newCategory}
+              title={t.newCategory}
               className="mx-auto mt-2 flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
             >
               <Plus className="h-4 w-4" />
@@ -748,15 +747,15 @@ export const Sidebar = React.memo(function Sidebar({
                   }
                 }}
                 disabled={isCreatingCategory}
-                aria-label="Yeni kategori adı"
-                placeholder="Kategori adı..."
+                aria-label={t.categoryNamePlaceholder}
+                placeholder={t.categoryNamePlaceholder}
                 maxLength={60}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] disabled:opacity-60"
               />
               <CategoryColorPicker
                 value={newCatColor}
                 onChange={setNewCatColor}
-                ariaLabel="Yeni kategori rengi"
+                ariaLabel={t.colorThemeTitle}
               />
               <div className="flex items-center justify-end gap-1.5">
                 <button
@@ -765,7 +764,7 @@ export const Sidebar = React.memo(function Sidebar({
                   disabled={isCreatingCategory}
                   className="rounded-md px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] disabled:opacity-40"
                 >
-                  İptal
+                  {t.cancelButton}
                 </button>
                 <button
                   type="submit"
@@ -773,7 +772,7 @@ export const Sidebar = React.memo(function Sidebar({
                   className="rounded-md px-2.5 py-1 text-xs font-medium transition-opacity disabled:opacity-40"
                   style={{ backgroundColor: 'var(--accent)', color: 'var(--accent-fg)' }}
                 >
-                  {isCreatingCategory ? 'Ekleniyor...' : 'Ekle'}
+                  {isCreatingCategory ? t.addingButton : t.addButton}
                 </button>
               </div>
             </form>
@@ -784,13 +783,13 @@ export const Sidebar = React.memo(function Sidebar({
               className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
             >
               <FolderPlus className="h-4 w-4 shrink-0" />
-              <span className="whitespace-nowrap">Yeni Kategori</span>
+              <span className="whitespace-nowrap">{t.newCategory}</span>
             </button>
           )}
         </section>
       </div>
 
-      {/* Settings Button (above footer divider) */}
+      {/* Settings Button */}
       <div className={compact ? 'px-2 pb-2 pt-1' : 'px-3 pb-2.5 pt-1'}>
         {compact ? (
           <button
@@ -799,8 +798,8 @@ export const Sidebar = React.memo(function Sidebar({
               onCloseMobile();
               onOpenSettings();
             }}
-            aria-label="Ayarlar"
-            title="Ayarlar"
+            aria-label={t.settings}
+            title={t.settings}
             className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
           >
             <Settings className="h-4 w-4" />
@@ -815,12 +814,12 @@ export const Sidebar = React.memo(function Sidebar({
             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
           >
             <Settings className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
-            <span className="whitespace-nowrap">Ayarlar</span>
+            <span className="whitespace-nowrap">{t.settings}</span>
           </button>
         )}
       </div>
 
-      {/* Footer Links (below divider) */}
+      {/* Footer Links */}
       <div className={compact ? 'border-t border-[var(--border)] p-2 space-y-1' : 'border-t border-[var(--border)] p-3'}>
         {compact ? (
           <>
@@ -838,8 +837,8 @@ export const Sidebar = React.memo(function Sidebar({
               href={SPONSOR_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Sponsor Ol"
-              title="Sponsor Ol"
+              aria-label={t.sponsor}
+              title={t.sponsor}
               className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
             >
               <Heart className="h-4 w-4" />
@@ -865,7 +864,7 @@ export const Sidebar = React.memo(function Sidebar({
               className="flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)]/60 px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
             >
               <Heart className="h-3.5 w-3.5 shrink-0" />
-              <span>Sponsor</span>
+              <span>{t.sponsor}</span>
             </a>
           </div>
         )}
@@ -875,19 +874,17 @@ export const Sidebar = React.memo(function Sidebar({
 
   return (
     <>
-      {/* Desktop Sidebar (supports Minimal Mode) */}
-      <div className="hidden md:flex h-full shrink-0">{renderSidebar(isCollapsed)}</div>
+      <div className="hidden md:flex h-full">{renderSidebar(isCollapsed)}</div>
 
-      {/* Mobile Drawer (always expanded) */}
       {isOpenMobile && (
         <div className="fixed inset-0 z-40 flex md:hidden">
           <button
             type="button"
-            aria-label="Menü arka planını kapat"
+            aria-label={t.closeMenu}
             onClick={onCloseMobile}
-            className="fixed inset-0 bg-black/40 backdrop-blur-[1px]"
+            className="fixed inset-0 bg-black/45"
           />
-          <div className="relative z-50 h-full">{renderSidebar(false)}</div>
+          <div className="relative z-10 flex h-full">{renderSidebar(false)}</div>
         </div>
       )}
     </>

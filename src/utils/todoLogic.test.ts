@@ -7,14 +7,21 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
   addDaysToDateString,
+  compareSemver,
   computeViewCounts,
   filterAndSortTodos,
   formatDueDateLabel,
+  formatTodoDateSchedule,
   getVerticalDropPosition,
+  isTodoScheduledForToday,
   isValidIsoDateString,
   moveIdRelative,
+  normalizeDateRange,
   sortCategoriesWithPin,
 } from './todoLogic';
+import { isValidLanguageCode, SUPPORTED_LANGUAGES } from '../i18n/languages';
+import { getDictionary } from '../i18n/localesWorld';
+import { getLegalDocuments } from '../i18n/translations';
 import {
   CATEGORY_COLORS,
   COLOR_THEMES,
@@ -210,6 +217,8 @@ test('QA: Fresh SQLite database starts clean with zero dummy test data', () => {
       dragLocked: false,
       sidebarCollapsed: false,
       themeCustomized: false,
+      language: 'tr',
+      autoUpdateCheck: true,
     });
   } finally {
     db.close();
@@ -948,6 +957,75 @@ test('QA: Fifth-pass pre-deployment audit hardening - createSubtask cap, transac
   } finally {
     db.close();
   }
+});
+
+test('QA: Optional start-end dates, 73-language i18n, legal documents & semver update checker work cleanly', () => {
+  // 1. Exactly 73 supported languages, all valid with complete dictionaries and legal documents
+  assert.equal(SUPPORTED_LANGUAGES.length, 73);
+  for (const langMeta of SUPPORTED_LANGUAGES) {
+    assert.ok(isValidLanguageCode(langMeta.code));
+    const dict = getDictionary(langMeta.code);
+    assert.ok(dict.allTasks.length > 0);
+    assert.ok(dict.instantSaveBadge.length > 0);
+    assert.ok(!dict.instantSaveBadge.toLowerCase().includes('sqlite'));
+    const docs = getLegalDocuments(langMeta.code, dict);
+    assert.ok(docs.privacy.sections.length >= 3);
+    assert.ok(docs.terms.sections.length >= 3);
+    assert.ok(docs.gdpr.sections.length >= 3);
+    assert.ok(docs.opensource.sections.length >= 2);
+    assert.ok(docs.accessibility.sections.length >= 3);
+  }
+
+  // 2. Date range normalization & schedule formatting (no date, single date, start-end range, swapped range)
+  assert.deepEqual(normalizeDateRange(null, null), { startDate: null, dueDate: null });
+  assert.deepEqual(normalizeDateRange('2026-11-25', '2026-11-20'), {
+    startDate: '2026-11-20',
+    dueDate: '2026-11-25',
+  });
+  assert.equal(formatTodoDateSchedule(null, null, '2026-11-20'), null);
+  const singleDue = formatTodoDateSchedule(null, '2026-11-20', '2026-11-20');
+  assert.equal(singleDue?.label, 'Bugün');
+  assert.equal(singleDue?.isRange, false);
+  const rangeSchedule = formatTodoDateSchedule('2026-11-20', '2026-11-21', '2026-11-20');
+  assert.equal(rangeSchedule?.label, 'Bugün - Yarın');
+  assert.equal(rangeSchedule?.isRange, true);
+  assert.equal(rangeSchedule?.isToday, true);
+  assert.ok(
+    isTodoScheduledForToday({ startDate: '2026-11-18', dueDate: '2026-11-22' }, '2026-11-20'),
+  );
+
+  // 3. SQLite persistence for optional startDate, dueDate, language & autoUpdateCheck
+  const db = new TodoDatabase(':memory:');
+  try {
+    const undated = db.createTodo({ title: 'Tarihsiz hızlı görev' });
+    assert.equal(undated.startDate, null);
+    assert.equal(undated.dueDate, null);
+
+    const ranged = db.createTodo({
+      title: 'Aralıklı görev',
+      startDate: '2026-11-25',
+      dueDate: '2026-11-20',
+    });
+    // Swapped automatically so startDate <= dueDate
+    assert.equal(ranged.startDate, '2026-11-20');
+    assert.equal(ranged.dueDate, '2026-11-25');
+
+    const clearedStart = db.updateTodo(ranged.id, { startDate: null });
+    assert.equal(clearedStart?.startDate, null);
+    assert.equal(clearedStart?.dueDate, '2026-11-25');
+
+    const settings = db.updateSettings({ language: 'en', autoUpdateCheck: false });
+    assert.equal(settings.language, 'en');
+    assert.equal(settings.autoUpdateCheck, false);
+  } finally {
+    db.close();
+  }
+
+  // 4. Semver comparison for manual & automatic update checker
+  assert.equal(compareSemver('1.0.0', '1.0.0'), 0);
+  assert.equal(compareSemver('v1.0.1', '1.0.0'), 1);
+  assert.equal(compareSemver('1.1.0', '1.0.9'), 1);
+  assert.equal(compareSemver('1.0.0', '1.0.2'), -1);
 });
 
 

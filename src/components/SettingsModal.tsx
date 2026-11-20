@@ -1,20 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check,
+  ChevronRight,
   Download,
+  FileText,
   Keyboard,
   Lock,
   Moon,
   RotateCcw,
+  Scale,
+  Shield,
   Sun,
   Trash2,
   Unlock,
   Upload,
   X,
 } from 'lucide-react';
-import type { Category, ThemeId, ThemeMode, Todo } from '../types';
+import { useI18n } from '../i18n/I18nContext';
+import type { LegalDocId } from '../i18n/translations';
+import type { Category, ThemeId, ThemeMode, Todo, UpdateCheckResult } from '../types';
 import { COLOR_THEMES } from '../utils/themes';
 import { ColorDot } from './ColorDot';
+import { LegalDocumentView } from './LegalDocumentView';
+import { UpdateAndLanguageSection } from './UpdateSettingsSection';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -24,6 +32,15 @@ interface SettingsModalProps {
   onChangeMode: (mode: ThemeMode) => void;
   onChangeTheme: (id: ThemeId) => void;
   onToggleDragLock: (locked: boolean) => void;
+  autoUpdateCheck: boolean;
+  onToggleAutoUpdateCheck: (enabled: boolean) => void;
+  updateState: {
+    status: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'error';
+    result: UpdateCheckResult | null;
+    downloadPercent: number | null;
+  };
+  onCheckForUpdates: () => Promise<void>;
+  onDownloadAndInstall: () => Promise<void>;
   totalTodoCount: number;
   completedTodoCount: number;
   onClearAllCompleted: () => Promise<void>;
@@ -39,26 +56,17 @@ interface SettingsModalProps {
 
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
-const SHORTCUTS = [
-  { keys: 'N', label: 'Yeni görev girişine odaklan' },
-  { keys: '/ veya Ctrl+K', label: 'Görevlerde ara' },
-  { keys: 'Alt + ↑ / ↓', label: 'Seçili görevin sırasını taşı' },
-  { keys: 'Esc', label: 'Açık paneli veya pencereyi kapat' },
-];
-
-const TRASH_DATE_FORMATTER = new Intl.DateTimeFormat('tr-TR', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-function formatDeletedAt(iso: string | null): string {
+function formatDeletedAt(iso: string | null, intlLocale: string): string {
   if (!iso) return '';
   try {
     const dt = new Date(iso);
     if (Number.isNaN(dt.getTime())) return '';
-    return TRASH_DATE_FORMATTER.format(dt);
+    return new Intl.DateTimeFormat(intlLocale, {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(dt);
   } catch {
     return '';
   }
@@ -72,6 +80,11 @@ export function SettingsModal({
   onChangeMode,
   onChangeTheme,
   onToggleDragLock,
+  autoUpdateCheck,
+  onToggleAutoUpdateCheck,
+  updateState,
+  onCheckForUpdates,
+  onDownloadAndInstall,
   totalTodoCount,
   completedTodoCount,
   onClearAllCompleted,
@@ -84,7 +97,9 @@ export function SettingsModal({
   onPermanentDeleteCategory,
   onEmptyTrash,
 }: SettingsModalProps) {
+  const { t, meta, getThemeDisplayName, legalDocs } = useI18n();
   const [activeTab, setActiveTab] = useState<'general' | 'trash'>('general');
+  const [activeLegalDoc, setActiveLegalDoc] = useState<LegalDocId | null>(null);
   const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isClearingCompleted, setIsClearingCompleted] = useState(false);
@@ -97,6 +112,7 @@ export function SettingsModal({
     summary: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -105,6 +121,12 @@ export function SettingsModal({
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (activeLegalDoc && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [activeLegalDoc]);
 
   const trashCount = trashedCategories.length + trashedTodos.length;
 
@@ -142,6 +164,10 @@ export function SettingsModal({
       if (e.key !== 'Escape') return;
       e.stopPropagation();
       if (isImporting) return;
+      if (activeLegalDoc) {
+        setActiveLegalDoc(null);
+        return;
+      }
       if (pendingImport) {
         setPendingImport(null);
         return;
@@ -150,7 +176,7 @@ export function SettingsModal({
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [isImporting, pendingImport, onClose]);
+  }, [isImporting, activeLegalDoc, pendingImport, onClose]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -178,9 +204,12 @@ export function SettingsModal({
       const trashCountInFile =
         (Array.isArray(record.trashedTodos) ? record.trashedTodos.length : 0) +
         (Array.isArray(record.trashedCategories) ? record.trashedCategories.length : 0);
-      const summaryParts = [`${todoCount} görev`, `${catCount} kategori`];
+      const summaryParts = [
+        `${todoCount} ${t.tasksTitle.toLowerCase()}`,
+        `${catCount} ${t.categories.toLowerCase()}`,
+      ];
       if (trashCountInFile > 0) {
-        summaryParts.push(`${trashCountInFile} çöp kutusu`);
+        summaryParts.push(`${trashCountInFile} ${t.tabTrash.toLowerCase()}`);
       }
       setPendingImport({
         fileName: file.name,
@@ -188,7 +217,7 @@ export function SettingsModal({
         summary: summaryParts.join(' · '),
       });
     } catch {
-      setImportError('Seçilen dosya geçerli bir JSON yedeği değil.');
+      setImportError('Seçilen dosya geçerli bir yedek dosyası değil.');
     }
   };
 
@@ -208,6 +237,21 @@ export function SettingsModal({
     }
   };
 
+  const shortcuts = [
+    { keys: 'N', label: t.shortcutNewTask },
+    { keys: '/ · Ctrl+K', label: t.shortcutSearch },
+    { keys: 'Alt + ↑ / ↓', label: t.shortcutReorder },
+    { keys: 'Esc', label: t.shortcutEscape },
+  ];
+
+  const legalItems: Array<{ id: LegalDocId; title: string; Icon: typeof Shield }> = [
+    { id: 'privacy', title: t.legalPrivacyTitle, Icon: Shield },
+    { id: 'terms', title: t.legalTermsTitle, Icon: Scale },
+    { id: 'gdpr', title: t.legalKvkkGdprTitle, Icon: FileText },
+    { id: 'opensource', title: t.legalOpenSourceTitle, Icon: FileText },
+    { id: 'accessibility', title: t.legalAccessibilityTitle, Icon: Shield },
+  ];
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5"
@@ -218,14 +262,14 @@ export function SettingsModal({
       {/* Backdrop */}
       <button
         type="button"
-        aria-label="Ayarlar penceresini kapat"
+        aria-label={t.closeMenu}
         disabled={isImporting}
         onClick={safeClose}
         className="fixed inset-0 bg-black/45 backdrop-blur-[2px]"
       />
 
       {/* Dialog Surface */}
-      <div className="relative z-10 flex max-h-[88vh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--surface)] shadow-2xl">
+      <div className="relative z-10 flex max-h-[88vh] w-full max-w-[580px] flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--surface)] shadow-2xl">
         {/* Header */}
         <div className="border-b border-[var(--border)] px-5 pt-4 pb-3 sm:px-6 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -234,74 +278,85 @@ export function SettingsModal({
                 id="settings-modal-title"
                 className="font-display text-base font-bold tracking-tight text-[var(--text-primary)]"
               >
-                Ayarlar
+                {activeLegalDoc ? legalDocs[activeLegalDoc].title : t.settings}
               </h2>
               <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                Tüm değişiklikler bilgisayarınıza anında kaydedilir.
+                {activeLegalDoc ? legalDocs[activeLegalDoc].subtitle : t.settingsSubtitle}
               </p>
             </div>
             <button
               type="button"
               disabled={isImporting}
               onClick={safeClose}
-              aria-label="Kapat"
+              aria-label={t.closeMenu}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Modal Navigation Tabs */}
-          <div
-            role="tablist"
-            aria-label="Ayar sekmeleri"
-            className="grid grid-cols-2 gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] p-1"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'general'}
-              onClick={() => {
-                setActiveTab('general');
-                setConfirmEmptyTrash(false);
-              }}
-              className={`rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'general'
-                  ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
+          {/* Modal Navigation Tabs (hidden when reading a legal sub-page) */}
+          {!activeLegalDoc && (
+            <div
+              role="tablist"
+              aria-label={t.settings}
+              className="grid grid-cols-2 gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] p-1"
             >
-              Genel ve Tema
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'trash'}
-              onClick={() => setActiveTab('trash')}
-              className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'trash'
-                  ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <span>Çöp Kutusu</span>
-              {trashCount > 0 && (
-                <span className="font-mono-tabular text-[11px] text-[var(--text-muted)]">
-                  ({trashCount})
-                </span>
-              )}
-            </button>
-          </div>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'general'}
+                onClick={() => {
+                  setActiveTab('general');
+                  setConfirmEmptyTrash(false);
+                }}
+                className={`rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                  activeTab === 'general'
+                    ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {t.tabGeneral}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'trash'}
+                onClick={() => setActiveTab('trash')}
+                className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                  activeTab === 'trash'
+                    ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <span>{t.tabTrash}</span>
+                {trashCount > 0 && (
+                  <span className="font-mono-tabular text-[11px] text-[var(--text-muted)]">
+                    ({trashCount})
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 space-y-6">
-          {activeTab === 'general' ? (
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 space-y-6"
+        >
+          {activeLegalDoc ? (
+            <LegalDocumentView
+              doc={legalDocs[activeLegalDoc]}
+              backLabel={t.backToSettingsButton}
+              onBack={() => setActiveLegalDoc(null)}
+            />
+          ) : activeTab === 'general' ? (
             <>
               {/* Appearance Mode */}
-              <section aria-label="Görünüm modu" className="space-y-2.5">
+              <section aria-label={t.appearanceModeTitle} className="space-y-2.5">
                 <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
-                  Görünüm Modu
+                  {t.appearanceModeTitle}
                 </h3>
                 <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] p-1">
                   <button
@@ -315,7 +370,7 @@ export function SettingsModal({
                     }`}
                   >
                     <Sun className="h-4 w-4" />
-                    <span>Açık</span>
+                    <span>{t.lightMode}</span>
                   </button>
                   <button
                     type="button"
@@ -328,19 +383,19 @@ export function SettingsModal({
                     }`}
                   >
                     <Moon className="h-4 w-4" />
-                    <span>Koyu</span>
+                    <span>{t.darkMode}</span>
                   </button>
                 </div>
               </section>
 
               {/* 14 Color Themes */}
-              <section aria-label="Renk teması" className="space-y-2.5">
+              <section aria-label={t.colorThemeTitle} className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
-                    Renk Teması
+                    {t.colorThemeTitle}
                   </h3>
                   <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
-                    {COLOR_THEMES.length} tema
+                    {COLOR_THEMES.length} {t.themesCountUnit}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -365,7 +420,9 @@ export function SettingsModal({
                             className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/15"
                             style={{ backgroundColor: swatch }}
                           />
-                          <span className="truncate whitespace-nowrap">{theme.name}</span>
+                          <span className="truncate whitespace-nowrap">
+                            {getThemeDisplayName(theme.id, theme.name)}
+                          </span>
                         </span>
                         {isSelected && (
                           <Check className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
@@ -378,14 +435,25 @@ export function SettingsModal({
 
               <div className="h-px bg-[var(--border)]" />
 
-              {/* Data & Backup (SQLite) */}
-              <section aria-label="Veri ve yedekleme" className="space-y-3">
+              {/* 73-Language Selector + Manual & Automatic Update System */}
+              <UpdateAndLanguageSection
+                autoUpdateCheck={autoUpdateCheck}
+                onToggleAutoUpdateCheck={onToggleAutoUpdateCheck}
+                updateState={updateState}
+                onCheckForUpdates={onCheckForUpdates}
+                onDownloadAndInstall={onDownloadAndInstall}
+              />
+
+              <div className="h-px bg-[var(--border)]" />
+
+              {/* Data & Backup (User-friendly non-technical descriptions) */}
+              <section aria-label={t.dataAndBackupTitle} className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
-                    Veri ve Yedekleme
+                    {t.dataAndBackupTitle}
                   </h3>
                   <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
-                    {totalTodoCount} kayıt · Yerel kayıt
+                    {totalTodoCount} {t.localRecordsBadge}
                   </span>
                 </div>
 
@@ -401,12 +469,11 @@ export function SettingsModal({
                 {pendingImport && (
                   <div
                     role="alertdialog"
-                    aria-label="Yedek geri yükleme onayı"
+                    aria-label={t.backupRestoreTitle}
                     className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 space-y-2.5"
                   >
                     <p className="text-xs leading-relaxed text-[var(--text-primary)]">
-                      <strong>{pendingImport.fileName}</strong> ({pendingImport.summary}) geri
-                      yüklensin mi? Mevcut tüm veriler bu yedekle değiştirilir.
+                      <strong>{pendingImport.fileName}</strong> ({pendingImport.summary})
                     </p>
                     <div className="flex items-center justify-end gap-1.5">
                       <button
@@ -415,7 +482,7 @@ export function SettingsModal({
                         onClick={() => setPendingImport(null)}
                         className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] disabled:opacity-40"
                       >
-                        Vazgeç
+                        {t.cancelButton}
                       </button>
                       <button
                         type="button"
@@ -424,7 +491,7 @@ export function SettingsModal({
                         className="rounded-lg px-3 py-1 text-xs font-medium transition-opacity disabled:opacity-40"
                         style={{ backgroundColor: 'var(--accent)', color: 'var(--accent-fg)' }}
                       >
-                        {isImporting ? 'Geri Yükleniyor...' : 'Üzerine Yaz ve Yükle'}
+                        {isImporting ? t.restoringButton : t.overwriteAndRestore}
                       </button>
                     </div>
                   </div>
@@ -434,19 +501,17 @@ export function SettingsModal({
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-[var(--text-primary)]">
-                        Sürükleyerek Sıralama
+                        {t.dragReorderTitle}
                       </p>
                       <p className="text-xs text-[var(--text-muted)]">
-                        {dragLocked
-                          ? 'Kilitli — kategori ve görevlerin konumu sürüklenerek değiştirilemez.'
-                          : 'Açık — kategori ve görevleri tutup sürükleyerek yeniden sıralayabilirsiniz.'}
+                        {dragLocked ? t.dragLockedDesc : t.dragUnlockedDesc}
                       </p>
                     </div>
                     <button
                       type="button"
                       role="switch"
                       aria-checked={!dragLocked}
-                      aria-label="Sürükleyerek sıralama kilidi"
+                      aria-label={t.dragReorderTitle}
                       onClick={() => onToggleDragLock(!dragLocked)}
                       className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                         dragLocked
@@ -457,12 +522,12 @@ export function SettingsModal({
                       {dragLocked ? (
                         <>
                           <Lock className="h-3.5 w-3.5" />
-                          <span>Kilitli</span>
+                          <span>{t.lockedBadge}</span>
                         </>
                       ) : (
                         <>
                           <Unlock className="h-3.5 w-3.5 text-[var(--accent)]" />
-                          <span>Açık</span>
+                          <span>{t.unlockedBadge}</span>
                         </>
                       )}
                     </button>
@@ -471,10 +536,10 @@ export function SettingsModal({
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-[var(--text-primary)]">
-                        Yedek İndir / Geri Yükle
+                        {t.backupRestoreTitle}
                       </p>
                       <p className="text-xs text-[var(--text-muted)]">
-                        Tüm görev, kategori, alt görev ve çöp kutusunu JSON olarak yedekleyin veya geri yükleyin.
+                        {t.backupRestoreDesc}
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -483,7 +548,7 @@ export function SettingsModal({
                         type="file"
                         accept="application/json,.json"
                         onChange={(e) => void handleFileChange(e)}
-                        aria-label="JSON yedek dosyası seç"
+                        aria-label={t.restoreButton}
                         className="hidden"
                       />
                       <button
@@ -493,7 +558,7 @@ export function SettingsModal({
                         className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40 transition-colors whitespace-nowrap"
                       >
                         <Upload className="h-3.5 w-3.5" />
-                        <span>{isImporting ? 'Yükleniyor...' : 'Geri Yükle'}</span>
+                        <span>{isImporting ? t.restoringButton : t.restoreButton}</span>
                       </button>
                       <a
                         href="/api/export"
@@ -501,7 +566,7 @@ export function SettingsModal({
                         className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors whitespace-nowrap"
                       >
                         <Download className="h-3.5 w-3.5" />
-                        <span>İndir</span>
+                        <span>{t.downloadBackupButton}</span>
                       </a>
                     </div>
                   </div>
@@ -509,12 +574,12 @@ export function SettingsModal({
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-[var(--text-primary)]">
-                        Tamamlananları Çöp Kutusuna Taşı
+                        {t.moveCompletedToTrashTitle}
                       </p>
                       <p className="text-xs text-[var(--text-muted)]">
                         {completedTodoCount > 0
-                          ? `${completedTodoCount} tamamlanmış görev çöp kutusuna taşınır.`
-                          : 'Taşınacak tamamlanmış görev bulunmuyor.'}
+                          ? `${completedTodoCount} ${t.completedCountLabel}`
+                          : t.moveCompletedToTrashEmptyDesc}
                       </p>
                     </div>
                     <button
@@ -532,7 +597,7 @@ export function SettingsModal({
                       className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40 transition-colors whitespace-nowrap shrink-0"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      <span>{isClearingCompleted ? 'Taşınıyor...' : 'Taşı'}</span>
+                      <span>{isClearingCompleted ? t.movingButton : t.moveButton}</span>
                     </button>
                   </div>
                 </div>
@@ -541,15 +606,15 @@ export function SettingsModal({
               <div className="h-px bg-[var(--border)]" />
 
               {/* Keyboard Shortcuts */}
-              <section aria-label="Klavye kısayolları" className="space-y-2.5">
+              <section aria-label={t.keyboardShortcutsTitle} className="space-y-2.5">
                 <div className="flex items-center gap-1.5">
                   <Keyboard className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                   <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
-                    Klavye Kısayolları
+                    {t.keyboardShortcutsTitle}
                   </h3>
                 </div>
                 <div className="space-y-1.5">
-                  {SHORTCUTS.map((item) => (
+                  {shortcuts.map((item) => (
                     <div
                       key={item.keys}
                       className="flex items-center justify-between gap-3 text-xs"
@@ -565,8 +630,42 @@ export function SettingsModal({
 
               <div className="h-px bg-[var(--border)]" />
 
+              {/* Legal Pages & Microsoft Store Compliance Section */}
+              <section aria-label={t.legalSectionTitle} className="space-y-2.5">
+                <div>
+                  <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
+                    {t.legalSectionTitle}
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                    {t.legalSectionSubtitle}
+                  </p>
+                </div>
+
+                <div className="divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--canvas)]">
+                  {legalItems.map(({ id, title, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setActiveLegalDoc(id)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors"
+                    >
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <Icon className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+                        <span className="truncate">{title}</span>
+                      </span>
+                      <ChevronRight className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <div className="h-px bg-[var(--border)]" />
+
               {/* About & Publisher */}
-              <section aria-label="Uygulama hakkında" className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
+              <section
+                aria-label="Agendamea"
+                className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]"
+              >
                 <div className="flex items-center gap-1.5">
                   <span className="font-display font-semibold text-[var(--text-primary)]">
                     Agendamea
@@ -596,14 +695,11 @@ export function SettingsModal({
           ) : (
             /* Trash Tab */
             <div className="space-y-5">
-              {/* Trash Header / Empty All Action */}
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-[var(--text-muted)]">
-                  Silinen görev ve kategoriler buradan geri yüklenebilir veya kalıcı olarak silinebilir.
-                </p>
+                <p className="text-xs text-[var(--text-muted)]">{t.trashIntroDesc}</p>
 
-                {trashCount > 0 && (
-                  confirmEmptyTrash ? (
+                {trashCount > 0 &&
+                  (confirmEmptyTrash ? (
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
@@ -611,7 +707,7 @@ export function SettingsModal({
                         onClick={() => setConfirmEmptyTrash(false)}
                         className="rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] disabled:opacity-40 whitespace-nowrap"
                       >
-                        Vazgeç
+                        {t.cancelButton}
                       </button>
                       <button
                         type="button"
@@ -628,7 +724,7 @@ export function SettingsModal({
                         }}
                         className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-40 transition-colors whitespace-nowrap"
                       >
-                        {isEmptyingTrash ? 'Siliniyor...' : 'Tümünü Kalıcı Sil'}
+                        {isEmptyingTrash ? t.deletingButton : t.confirmDeleteAllPermanent}
                       </button>
                     </div>
                   ) : (
@@ -638,30 +734,27 @@ export function SettingsModal({
                       className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--canvas)] px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap shrink-0"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      <span>Çöp Kutusunu Boşalt</span>
+                      <span>{t.emptyTrashButton}</span>
                     </button>
-                  )
-                )}
+                  ))}
               </div>
 
               {trashCount === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--canvas)] px-6 py-12 text-center">
                   <Trash2 className="mb-2.5 h-6 w-6 text-[var(--text-muted)]" />
                   <p className="font-display text-sm font-semibold text-[var(--text-primary)]">
-                    Çöp kutusu boş
+                    {t.trashEmptyTitle}
                   </p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    Sildiğiniz görevler ve kategoriler burada güvenle saklanır.
-                  </p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">{t.trashEmptyDesc}</p>
                 </div>
               ) : (
                 <>
                   {/* Trashed Categories */}
                   {trashedCategories.length > 0 && (
-                    <section aria-label="Silinen kategoriler" className="space-y-2">
+                    <section aria-label={t.categories} className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
-                          Kategoriler
+                          {t.categories}
                         </h3>
                         <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
                           {trashedCategories.length}
@@ -681,7 +774,7 @@ export function SettingsModal({
                                 </p>
                               </div>
                               <p className="mt-0.5 text-[11px] text-[var(--text-muted)] font-mono-tabular">
-                                Silindi: {formatDeletedAt(cat.deletedAt)}
+                                {t.deletedPrefix}: {formatDeletedAt(cat.deletedAt, meta.intlLocale)}
                               </p>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -693,11 +786,11 @@ export function SettingsModal({
                                     onRestoreCategory(cat.id),
                                   )
                                 }
-                                aria-label={`Kategoriyi geri yükle: ${cat.name}`}
+                                aria-label={`${t.restoreItemButton}: ${cat.name}`}
                                 className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40 transition-colors whitespace-nowrap"
                               >
                                 <RotateCcw className="h-3 w-3" />
-                                <span>Geri Yükle</span>
+                                <span>{t.restoreItemButton}</span>
                               </button>
                               <button
                                 type="button"
@@ -707,9 +800,9 @@ export function SettingsModal({
                                     onPermanentDeleteCategory(cat.id),
                                   )
                                 }
-                                aria-label={`Kategoriyi kalıcı sil: ${cat.name}`}
+                                aria-label={`${t.permanentDeleteTitle}: ${cat.name}`}
                                 className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-red-600 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
-                                title="Kalıcı Sil"
+                                title={t.permanentDeleteTitle}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -722,10 +815,10 @@ export function SettingsModal({
 
                   {/* Trashed Todos */}
                   {trashedTodos.length > 0 && (
-                    <section aria-label="Silinen görevler" className="space-y-2">
+                    <section aria-label={t.tasksTitle} className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
-                          Görevler
+                          {t.tasksTitle}
                         </h3>
                         <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
                           {trashedTodos.length}
@@ -748,9 +841,10 @@ export function SettingsModal({
                                 {todo.title}
                               </p>
                               <p className="mt-0.5 text-[11px] text-[var(--text-muted)] font-mono-tabular">
-                                Silindi: {formatDeletedAt(todo.deletedAt)}
+                                {t.deletedPrefix}:{' '}
+                                {formatDeletedAt(todo.deletedAt, meta.intlLocale)}
                                 {todo.subtasks.length > 0
-                                  ? ` · ${todo.subtasks.length} alt görev`
+                                  ? ` · ${todo.subtasks.length} ${t.subtaskCountUnit}`
                                   : ''}
                               </p>
                             </div>
@@ -763,11 +857,11 @@ export function SettingsModal({
                                     onRestoreTodo(todo.id),
                                   )
                                 }
-                                aria-label={`Görevi geri yükle: ${todo.title}`}
+                                aria-label={`${t.restoreItemButton}: ${todo.title}`}
                                 className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40 transition-colors whitespace-nowrap"
                               >
                                 <RotateCcw className="h-3 w-3" />
-                                <span>Geri Yükle</span>
+                                <span>{t.restoreItemButton}</span>
                               </button>
                               <button
                                 type="button"
@@ -777,9 +871,9 @@ export function SettingsModal({
                                     onPermanentDeleteTodo(todo.id),
                                   )
                                 }
-                                aria-label={`Görevi kalıcı sil: ${todo.title}`}
+                                aria-label={`${t.permanentDeleteTitle}: ${todo.title}`}
                                 className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-red-600 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
-                                title="Kalıcı Sil"
+                                title={t.permanentDeleteTitle}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>

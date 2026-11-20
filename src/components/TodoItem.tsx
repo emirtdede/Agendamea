@@ -1,7 +1,8 @@
 import React from 'react';
 import { Check, Pin, Star, Trash2 } from 'lucide-react';
+import { useI18n } from '../i18n/I18nContext';
 import type { Category, Todo } from '../types';
-import { formatDueDateLabel, getPriorityLabel } from '../utils/todoLogic';
+import { formatTodoDateSchedule } from '../utils/todoLogic';
 import { ColorDot } from './ColorDot';
 
 interface TodoItemProps {
@@ -43,7 +44,18 @@ export const TodoItem = React.memo(function TodoItem({
   onDrop,
   onDragEnd,
 }: TodoItemProps) {
-  const dueInfo = formatDueDateLabel(todo.dueDate, todayStr);
+  const { t, meta } = useI18n();
+  const dueInfo = formatTodoDateSchedule(
+    todo.startDate,
+    todo.dueDate,
+    todayStr,
+    meta.intlLocale,
+    {
+      today: t.today,
+      tomorrow: t.tomorrow,
+      yesterday: t.yesterday,
+    },
+  );
   let completedSubtasks = 0;
   for (let i = 0; i < todo.subtasks.length; i += 1) {
     if (todo.subtasks[i].completed) completedSubtasks += 1;
@@ -79,13 +91,15 @@ export const TodoItem = React.memo(function TodoItem({
           }
         >
           {dueInfo.label}
-          {overdue ? ' (Gecikti)' : ''}
+          {overdue ? ` (${t.overdueSuffix})` : ''}
         </span>
       ),
     });
   }
 
   if (todo.priority !== 'normal') {
+    const prioText =
+      todo.priority === 'high' ? t.priorityHigh : t.priorityLow;
     metadataParts.push({
       key: 'priority',
       content: (
@@ -96,7 +110,7 @@ export const TodoItem = React.memo(function TodoItem({
               : ''
           }
         >
-          {getPriorityLabel(todo.priority)} öncelik
+          {prioText} {t.prioritySuffix}
         </span>
       ),
     });
@@ -107,7 +121,7 @@ export const TodoItem = React.memo(function TodoItem({
       key: 'subtasks',
       content: (
         <span className="font-mono-tabular">
-          {completedSubtasks}/{totalSubtasks} alt görev
+          {completedSubtasks}/{totalSubtasks} {t.subtaskCountUnit}
         </span>
       ),
     });
@@ -165,8 +179,8 @@ export const TodoItem = React.memo(function TodoItem({
         onClick={() => onToggleComplete(todo.id, !todo.completed)}
         aria-label={
           todo.completed
-            ? `Tamamlandı işaretini kaldır: ${todo.title}`
-            : `Tamamla: ${todo.title}`
+            ? `${t.markCompletedDone}: ${todo.title}`
+            : `${t.markComplete}: ${todo.title}`
         }
         aria-pressed={todo.completed}
         className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all duration-150"
@@ -190,7 +204,7 @@ export const TodoItem = React.memo(function TodoItem({
       <button
         type="button"
         onClick={() => onSelect(todo.id)}
-        aria-label={`Görevi düzenle: ${todo.title}`}
+        aria-label={todo.title}
         className="flex-1 min-w-0 text-left focus:outline-none"
       >
         <p
@@ -221,18 +235,14 @@ export const TodoItem = React.memo(function TodoItem({
         )}
       </button>
 
-      {/* Right Action Controls (no reorder icon/handle) */}
+      {/* Right Action Controls */}
       <div className="flex items-center gap-0.5 shrink-0">
         <button
           type="button"
           onClick={() => onTogglePin(todo.id, !todo.pinned)}
-          aria-label={
-            todo.pinned
-              ? `Sabitlemeyi kaldır: ${todo.title}`
-              : `Görevi sabitle: ${todo.title}`
-          }
+          aria-label={`${todo.pinned ? t.unpinLabel : t.pinLabel}: ${todo.title}`}
           aria-pressed={todo.pinned}
-          title={todo.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'}
+          title={todo.pinned ? t.unpinLabel : t.pinLabel}
           className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
             todo.pinned
               ? 'text-[var(--accent)] hover:bg-[var(--surface)]'
@@ -245,13 +255,9 @@ export const TodoItem = React.memo(function TodoItem({
         <button
           type="button"
           onClick={() => onToggleImportant(todo.id, !todo.important)}
-          aria-label={
-            todo.important
-              ? `Önemli işaretini kaldır: ${todo.title}`
-              : `Önemli olarak işaretle: ${todo.title}`
-          }
+          aria-label={`${t.important}: ${todo.title}`}
           aria-pressed={todo.important}
-          title={todo.important ? 'Önemli işaretini kaldır' : 'Önemli'}
+          title={t.important}
           className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
             todo.important
               ? 'text-amber-500'
@@ -264,8 +270,8 @@ export const TodoItem = React.memo(function TodoItem({
         <button
           type="button"
           onClick={() => onDelete(todo.id)}
-          aria-label={`Görevi sil: ${todo.title}`}
-          title="Çöpe taşı"
+          aria-label={`${t.deleteToTrashButton}: ${todo.title}`}
+          title={t.deleteToTrashButton}
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:bg-[var(--surface)] hover:text-red-500 transition-colors"
         >
           <Trash2 className="h-4 w-4" />
