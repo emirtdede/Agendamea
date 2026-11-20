@@ -49,6 +49,15 @@
       (function () {
         try {
           var root = document.documentElement;
+          var savedLang = localStorage.getItem('agendamea-language');
+          if (savedLang) {
+            root.lang = savedLang;
+            if (savedLang === 'ar' || savedLang === 'fa' || savedLang === 'he' || savedLang === 'ur') {
+              root.dir = 'rtl';
+            } else {
+              root.dir = 'ltr';
+            }
+          }
           var mode = localStorage.getItem('agendamea-theme-mode');
           if (mode === 'dark') {
             root.classList.add('dark');

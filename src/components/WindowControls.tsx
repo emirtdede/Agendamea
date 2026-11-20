@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { useI18n } from '../i18n/I18nContext';
 
 interface NativeWindowBridge {
   minimize?: () => void | Promise<void>;
@@ -30,6 +31,7 @@ function getNativeBridge(): NativeWindowBridge | null {
 }
 
 export function WindowControls({ onNotify }: WindowControlsProps) {
+  const { t } = useI18n();
   const [isFullscreenOrMaximized, setIsFullscreenOrMaximized] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
 
@@ -37,7 +39,6 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
     let active = true;
     const bridge = getNativeBridge();
 
-    // Sync with Electron / WebView2 native maximized state if present
     let unsubNative: (() => void) | void;
     if (bridge?.isMaximized) {
       Promise.resolve(bridge.isMaximized())
@@ -52,7 +53,6 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
       });
     }
 
-    // Sync with browser Fullscreen API (Windows 10/11 Edge/Chrome & F11)
     const syncFullscreen = () => {
       if (!bridge?.toggleMaximize) {
         setIsFullscreenOrMaximized(Boolean(document.fullscreenElement));
@@ -80,7 +80,6 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
       return;
     }
 
-    // Exit fullscreen first if active so minimize behaves naturally on Windows 10/11
     if (document.fullscreenElement && document.exitFullscreen) {
       await document.exitFullscreen().catch(() => {});
     }
@@ -89,12 +88,12 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
       const res = await api.minimizeWindow();
       window.blur();
       if (!res.supported) {
-        onNotify?.('Pencere arka plana gönderildi.');
+        onNotify?.(t.windowMinimizedToast);
       }
     } catch {
       window.blur();
     }
-  }, [onNotify]);
+  }, [onNotify, t.windowMinimizedToast]);
 
   const handleToggleFullscreen = useCallback(async () => {
     const bridge = getNativeBridge();
@@ -117,9 +116,9 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
         setIsFullscreenOrMaximized(true);
       }
     } catch {
-      onNotify?.('Tam ekran modu tarayıcı tarafından engellendi (F11 kullanabilirsiniz).');
+      onNotify?.(t.windowFullscreenBlockedToast);
     }
-  }, [onNotify]);
+  }, [onNotify, t.windowFullscreenBlockedToast]);
 
   const handleClose = useCallback(async () => {
     const bridge = getNativeBridge();
@@ -128,33 +127,33 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
       return;
     }
 
-    // Works natively in Edge --app mode & installed Windows PWA windows
     window.close();
 
-    // If standard browser tab blocked window.close(), inform quietly without window.alert
     if (closeTimerRef.current !== null) {
       window.clearTimeout(closeTimerRef.current);
     }
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       if (!window.closed) {
-        onNotify?.('Tarayıcı sekmesini kapatmak için Ctrl+W veya sekme kapatma düğmesini kullanın.');
+        onNotify?.(t.windowCloseTabToast);
       }
     }, 180);
-  }, [onNotify]);
+  }, [onNotify, t.windowCloseTabToast]);
+
+  const maximizeTitle = isFullscreenOrMaximized ? t.windowRestore : t.windowMaximize;
 
   return (
     <div
       role="group"
-      aria-label="Pencere kontrolleri"
+      aria-label={t.windowControlsLabel}
       className="app-no-drag flex items-center gap-0.5 rounded-lg bg-[var(--canvas)]/75 p-0.5 backdrop-blur-sm"
     >
-      {/* Arka Plana Gönder (Minimize) */}
+      {/* Minimize */}
       <button
         type="button"
         onClick={() => void handleMinimize()}
-        aria-label="Arka plana gönder"
-        title="Arka plana gönder"
+        aria-label={t.windowMinimize}
+        title={t.windowMinimize}
         className="app-no-drag flex h-7 w-8 cursor-pointer items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] active:bg-[var(--border)]"
       >
         <svg
@@ -173,12 +172,12 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
         </svg>
       </button>
 
-      {/* Tam Ekran Yap / Tam Ekrandan Çık (Maximize / Restore) */}
+      {/* Maximize / Restore */}
       <button
         type="button"
         onClick={() => void handleToggleFullscreen()}
-        aria-label={isFullscreenOrMaximized ? 'Tam ekrandan çık' : 'Tam ekran yap'}
-        title={isFullscreenOrMaximized ? 'Tam ekrandan çık' : 'Tam ekran yap'}
+        aria-label={maximizeTitle}
+        title={maximizeTitle}
         aria-pressed={isFullscreenOrMaximized}
         className="app-no-drag flex h-7 w-8 cursor-pointer items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] active:bg-[var(--border)]"
       >
@@ -227,12 +226,12 @@ export function WindowControls({ onNotify }: WindowControlsProps) {
         )}
       </button>
 
-      {/* Uygulamayı Kapat (Close) */}
+      {/* Close */}
       <button
         type="button"
         onClick={() => void handleClose()}
-        aria-label="Uygulamayı kapat"
-        title="Uygulamayı kapat"
+        aria-label={t.windowClose}
+        title={t.windowClose}
         className="app-no-drag flex h-7 w-8 cursor-pointer items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[#c42b1c] hover:text-white active:bg-[#a62216]"
       >
         <svg

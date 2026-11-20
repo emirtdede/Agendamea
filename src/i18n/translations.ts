@@ -1,6 +1,9 @@
 import type { LanguageCode } from './languages';
 
 export interface UiDictionary {
+  // Application title
+  appTitleSuffix: string;
+
   // Smart views & navigation
   allTasks: string;
   today: string;
@@ -97,6 +100,8 @@ export interface UiDictionary {
   dragUnlockedDesc: string;
   lockedBadge: string;
   unlockedBadge: string;
+  enabledBadge: string;
+  disabledBadge: string;
   backupRestoreTitle: string;
   backupRestoreDesc: string;
   restoreButton: string;
@@ -158,9 +163,51 @@ export interface UiDictionary {
   todoMovedToTrashToast: string;
   categoryMovedToTrashToast: string;
   backupRestoredToast: string;
+
+  // Window Controls
+  windowControlsLabel: string;
+  windowMinimize: string;
+  windowMaximize: string;
+  windowRestore: string;
+  windowClose: string;
+  windowMinimizedToast: string;
+  windowFullscreenBlockedToast: string;
+  windowCloseTabToast: string;
+
+  // Category Color Picker
+  selectColorLabel: string;
+  customColorTitle: string;
+  customColorHexLabel: string;
+
+  // 16 Localized Color Names (14 Theme Colors + Pure Yellow + White)
+  colorObsidian: string;
+  colorSlate: string;
+  colorNavy: string;
+  colorBlue: string;
+  colorCyan: string;
+  colorIndigo: string;
+  colorPurple: string;
+  colorPink: string;
+  colorRed: string;
+  colorOrange: string;
+  colorYellow: string;
+  colorPureYellow: string;
+  colorEmerald: string;
+  colorGrass: string;
+  colorLime: string;
+  colorWhite: string;
+
+  // Localized Error & Validation Messages
+  importSizeExceededError: string;
+  importInvalidBackupError: string;
+  importRestoreFailedError: string;
+  operationFailedToast: string;
+  loadFailedError: string;
 }
 
 export const TR_DICTIONARY: UiDictionary = {
+  appTitleSuffix: 'Görev Yöneticisi',
+
   allTasks: 'Tüm Görevler',
   today: 'Bugün',
   important: 'Önemli',
@@ -250,6 +297,8 @@ export const TR_DICTIONARY: UiDictionary = {
   dragUnlockedDesc: 'Açık - kategori ve görevleri tutup sürükleyerek yeniden sıralayabilirsiniz.',
   lockedBadge: 'Kilitli',
   unlockedBadge: 'Açık',
+  enabledBadge: 'Açık',
+  disabledBadge: 'Kapalı',
   backupRestoreTitle: 'Yedek İndir / Geri Yükle',
   backupRestoreDesc: 'Tüm görev, kategori, alt görev ve çöp kutusu verilerinizi yedek dosyası olarak indirin veya geri yükleyin.',
   restoreButton: 'Geri Yükle',
@@ -307,9 +356,47 @@ export const TR_DICTIONARY: UiDictionary = {
   todoMovedToTrashToast: 'Görev çöp kutusuna taşındı',
   categoryMovedToTrashToast: 'Kategori çöp kutusuna taşındı',
   backupRestoredToast: 'Yedek başarıyla geri yüklendi.',
+
+  windowControlsLabel: 'Pencere kontrolleri',
+  windowMinimize: 'Arka plana gönder',
+  windowMaximize: 'Tam ekran yap',
+  windowRestore: 'Tam ekrandan çık',
+  windowClose: 'Uygulamayı kapat',
+  windowMinimizedToast: 'Pencere arka plana gönderildi.',
+  windowFullscreenBlockedToast: 'Tam ekran modu tarayıcı tarafından engellendi (F11 kullanabilirsiniz).',
+  windowCloseTabToast: 'Tarayıcı sekmesini kapatmak için Ctrl+W veya sekme kapatma düğmesini kullanın.',
+
+  selectColorLabel: 'Renk seç',
+  customColorTitle: 'Özel renk seç',
+  customColorHexLabel: 'Özel renk kodu (HEX)',
+
+  colorObsidian: 'Siyah',
+  colorSlate: 'Gri',
+  colorNavy: 'Lacivert',
+  colorBlue: 'Mavi',
+  colorCyan: 'Turkuaz',
+  colorIndigo: 'İndigo',
+  colorPurple: 'Mor',
+  colorPink: 'Pembe',
+  colorRed: 'Kırmızı',
+  colorOrange: 'Turuncu',
+  colorYellow: 'Kehribar',
+  colorPureYellow: 'Sarı',
+  colorEmerald: 'Zümrüt',
+  colorGrass: 'Yeşil',
+  colorLime: 'Limon',
+  colorWhite: 'Beyaz',
+
+  importSizeExceededError: 'Seçilen yedek dosyası 5 MB sınırını aşıyor.',
+  importInvalidBackupError: 'Seçilen dosya geçerli bir Agendamea yedeği değil.',
+  importRestoreFailedError: 'Yedek geri yüklenemedi.',
+  operationFailedToast: 'İşlem tamamlanamadı. Lütfen tekrar deneyin.',
+  loadFailedError: 'Veriler yüklenemedi.',
 };
 
 export const EN_DICTIONARY: UiDictionary = {
+  appTitleSuffix: 'Task Manager',
+
   allTasks: 'All Tasks',
   today: 'Today',
   important: 'Important',
@@ -399,6 +486,8 @@ export const EN_DICTIONARY: UiDictionary = {
   dragUnlockedDesc: 'Unlocked - drag categories and tasks to reorder them freely.',
   lockedBadge: 'Locked',
   unlockedBadge: 'Unlocked',
+  enabledBadge: 'Enabled',
+  disabledBadge: 'Disabled',
   backupRestoreTitle: 'Download / Restore Backup',
   backupRestoreDesc: 'Download or restore all tasks, categories, subtasks, and trash as a backup file.',
   restoreButton: 'Restore',
@@ -456,24 +545,112 @@ export const EN_DICTIONARY: UiDictionary = {
   todoMovedToTrashToast: 'Task moved to trash',
   categoryMovedToTrashToast: 'Category moved to trash',
   backupRestoredToast: 'Backup restored successfully.',
+
+  windowControlsLabel: 'Window controls',
+  windowMinimize: 'Minimize',
+  windowMaximize: 'Maximize',
+  windowRestore: 'Restore down',
+  windowClose: 'Close application',
+  windowMinimizedToast: 'Window minimized to background.',
+  windowFullscreenBlockedToast: 'Fullscreen mode was blocked by the browser (press F11).',
+  windowCloseTabToast: 'Use Ctrl+W or the browser tab close button to close this tab.',
+
+  selectColorLabel: 'Select color',
+  customColorTitle: 'Choose custom color',
+  customColorHexLabel: 'Custom color code (HEX)',
+
+  colorObsidian: 'Obsidian',
+  colorSlate: 'Slate',
+  colorNavy: 'Navy',
+  colorBlue: 'Blue',
+  colorCyan: 'Cyan',
+  colorIndigo: 'Indigo',
+  colorPurple: 'Purple',
+  colorPink: 'Pink',
+  colorRed: 'Red',
+  colorOrange: 'Orange',
+  colorYellow: 'Amber',
+  colorPureYellow: 'Yellow',
+  colorEmerald: 'Emerald',
+  colorGrass: 'Green',
+  colorLime: 'Lime',
+  colorWhite: 'White',
+
+  importSizeExceededError: 'Selected backup file exceeds the 5 MB limit.',
+  importInvalidBackupError: 'Selected file is not a valid Agendamea backup.',
+  importRestoreFailedError: 'Failed to restore backup.',
+  operationFailedToast: 'Operation could not be completed. Please try again.',
+  loadFailedError: 'Failed to load data.',
 };
 
-export const THEME_NAME_TRANSLATIONS: Record<string, { tr: string; en: string }> = {
-  obsidian: { tr: 'Siyah', en: 'Obsidian' },
-  slate: { tr: 'Gri', en: 'Slate' },
-  navy: { tr: 'Lacivert', en: 'Navy' },
-  blue: { tr: 'Mavi', en: 'Blue' },
-  cyan: { tr: 'Turkuaz', en: 'Cyan' },
-  purple: { tr: 'Mor', en: 'Purple' },
-  red: { tr: 'Kırmızı', en: 'Red' },
-  orange: { tr: 'Turuncu', en: 'Orange' },
-  yellow: { tr: 'Kehribar', en: 'Amber' },
-  emerald: { tr: 'Zümrüt', en: 'Emerald' },
-  grass: { tr: 'Yeşil', en: 'Green' },
-  lime: { tr: 'Limon', en: 'Lime' },
-  pink: { tr: 'Pembe', en: 'Pink' },
-  indigo: { tr: 'İndigo', en: 'Indigo' },
+export const THEME_COLOR_DICT_KEYS: Record<string, keyof UiDictionary> = {
+  obsidian: 'colorObsidian',
+  slate: 'colorSlate',
+  navy: 'colorNavy',
+  blue: 'colorBlue',
+  cyan: 'colorCyan',
+  indigo: 'colorIndigo',
+  purple: 'colorPurple',
+  pink: 'colorPink',
+  red: 'colorRed',
+  orange: 'colorOrange',
+  yellow: 'colorYellow',
+  emerald: 'colorEmerald',
+  grass: 'colorGrass',
+  lime: 'colorLime',
 };
+
+export const CATEGORY_HEX_DICT_KEYS: Record<string, keyof UiDictionary> = {
+  '#dc2626': 'colorRed',
+  '#2563eb': 'colorBlue',
+  '#16a34a': 'colorGrass',
+  '#eab308': 'colorPureYellow',
+  '#ea580c': 'colorOrange',
+  '#7c3aed': 'colorPurple',
+  '#db2777': 'colorPink',
+  '#ffffff': 'colorWhite',
+};
+
+export function resolveThemeColorName(
+  themeId: string,
+  fallbackName: string,
+  dict: UiDictionary,
+): string {
+  const key = THEME_COLOR_DICT_KEYS[themeId];
+  return key ? dict[key] : fallbackName;
+}
+
+export function resolveCategoryColorName(
+  hex: string,
+  fallbackName: string,
+  dict: UiDictionary,
+): string {
+  const key = CATEGORY_HEX_DICT_KEYS[hex.toLowerCase()];
+  return key ? dict[key] : fallbackName;
+}
+
+export function localizeErrorMessage(
+  err: unknown,
+  fallback: string,
+  lang: LanguageCode,
+  dict: UiDictionary,
+): string {
+  if (!(err instanceof Error) || !err.message) {
+    return fallback;
+  }
+  if (lang === 'tr') {
+    return err.message;
+  }
+  const msg = err.message.toLowerCase();
+  if (msg.includes('5 mb')) {
+    return dict.importSizeExceededError;
+  }
+  if (msg.includes('yedek') || msg.includes('json')) {
+    return dict.importInvalidBackupError;
+  }
+  // Never leak Turkish server/client error strings into non-Turkish locales
+  return fallback;
+}
 
 export type LegalDocId = 'privacy' | 'terms' | 'gdpr' | 'opensource' | 'accessibility';
 
@@ -489,294 +666,248 @@ export interface LegalDocumentContent {
   sections: LegalDocSection[];
 }
 
-export function getLegalDocuments(lang: LanguageCode, dict: UiDictionary): Record<LegalDocId, LegalDocumentContent> {
-  const isTr = lang === 'tr' || lang === 'az' || lang === 'tk' || lang === 'uz' || lang === 'kk' || lang === 'ky';
+export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
+  privacy: {
+    id: 'privacy',
+    title: TR_DICTIONARY.legalPrivacyTitle,
+    subtitle: TR_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Yerel Öncelikli (Offline-First) Veri Mimarisi',
+        paragraphs: [
+          'Agendamea, Vellium (vellium.dev) tarafından gizlilik öncelikli olarak geliştirilmiştir. Oluşturduğunuz tüm görevler, başlangıç ve bitiş tarihleri, alt görevler, notlar, kategoriler ve tema tercihleri yalnızca kendi bilgisayarınızda (%APPDATA%\\Agendamea dizininde) yerel olarak saklanır.',
+          'Hiçbir görev veriniz uzak bir bulut sunucusuna gönderilmez, üçüncü taraflarla paylaşılmaz veya reklam/profilleme amacıyla işlenmez.',
+        ],
+      },
+      {
+        heading: '2. Telemetri, İzleme ve Analitik Yokluğu',
+        paragraphs: [
+          'Agendamea içinde hiçbir kullanıcı izleme kodu, analitik izleyicisi, reklam kimliği veya davranışsal telemetri bulunmaz. Uygulama internet bağlantısı olmadan tam kapasiteyle çalışır.',
+        ],
+      },
+      {
+        heading: '3. Güncelleme Kontrolü ve Veri Taşınabilirliği',
+        paragraphs: [
+          'Güncelleme kontrolü yalnızca en son sürüm numarasını doğrulamak amacıyla GitHub Releases (api.github.com/repos/emirtdede/Agendamea/releases/latest) adresine kişisel veri içermeyen standart bir HTTPS sorgusu gönderir. Verilerinizi dilediğiniz an yedek dosyası olarak indirebilir veya kaldırıcı üzerinden kalıcı olarak silebilirsiniz.',
+        ],
+      },
+    ],
+  },
+  terms: {
+    id: 'terms',
+    title: TR_DICTIONARY.legalTermsTitle,
+    subtitle: TR_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Lisans Kapsamı ve Kullanım Hakkı',
+        paragraphs: [
+          'Agendamea, Vellium tarafından MIT Açık Kaynak Lisansı ve Microsoft Store Standart Uygulama Lisans Koşulları çerçevesinde sunulmaktadır. Uygulamayı kişisel ve ticari görev yönetimi amacıyla cihazlarınızda ücretsiz olarak kurabilir ve kullanabilirsiniz.',
+        ],
+      },
+      {
+        heading: '2. Kullanıcı Sorumluluğu ve Yedekleme',
+        paragraphs: [
+          'Veriler tamamen kullanıcının kendi cihazında yerel olarak tutulduğundan, cihaz arızası veya işletim sistemi sıfırlaması gibi durumlara karşı Ayarlar > Yedek İndir özelliğiyle düzenli yedek almak kullanıcının sorumluluğundadır.',
+        ],
+      },
+      {
+        heading: '3. Garanti Reddi ve Fikri Mülkiyet',
+        paragraphs: [
+          'Yazılım, yürürlükteki yasaların izin verdiği azami ölçüde herhangi bir garanti olmaksızın "olduğu gibi" (AS-IS) sunulmaktadır. Agendamea adı, amblemi ve Vellium markası Vellium (vellium.dev) bünyesine aittir.',
+        ],
+      },
+    ],
+  },
+  gdpr: {
+    id: 'gdpr',
+    title: TR_DICTIONARY.legalKvkkGdprTitle,
+    subtitle: TR_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Veri Sorumlusu ve İşleme Amacı',
+        paragraphs: [
+          '6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve Avrupa Birliği Genel Veri Koruma Tüzüğü (GDPR) kapsamında Vellium, kullanıcı cihazında tutulan görev verilerine uzaktan erişmez ve merkezi bir veri tabanında kişisel veri toplamaz.',
+        ],
+      },
+      {
+        heading: '2. Yerel Depolama ve Güvenlik',
+        paragraphs: [
+          'Tüm uygulama ayarları ve görev kayıtları yalnızca cihazınızın işletim sistemi kullanıcı profili altında saklanır ve yerel ağ dışından erişime kapalıdır (127.0.0.1 geri döngü arayüzü).',
+        ],
+      },
+      {
+        heading: '3. İlgili Kişi Hakları (Erişim, Düzeltme, Silme ve Taşıma)',
+        paragraphs: [
+          'Tüm veriler cihazınızda olduğundan; verilerinize anında erişme, düzenleme, Çöp Kutusu üzerinden kalıcı olarak silme ve dışa aktarma haklarınızı doğrudan uygulama arayüzünden kullanabilirsiniz.',
+        ],
+      },
+    ],
+  },
+  opensource: {
+    id: 'opensource',
+    title: TR_DICTIONARY.legalOpenSourceTitle,
+    subtitle: TR_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Agendamea Lisansı (MIT)',
+        paragraphs: [
+          'Copyright © 2026 Vellium (https://vellium.dev). Bu yazılım MIT Lisansı altında lisanslanmıştır.',
+        ],
+      },
+      {
+        heading: '2. Üçüncü Taraf Açık Kaynak Bileşenleri',
+        paragraphs: [
+          '• Electron (MIT License) · React & React DOM (MIT License) · Better-SQLite3 & SQLite (MIT / Public Domain) · Express (MIT License) · Tailwind CSS (MIT License) · Lucide React (ISC License) · Vite & Vite Plugin PWA (MIT License)',
+        ],
+      },
+    ],
+  },
+  accessibility: {
+    id: 'accessibility',
+    title: TR_DICTIONARY.legalAccessibilityTitle,
+    subtitle: TR_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Klavye ve Ekran Okuyucu Erişilebilirliği',
+        paragraphs: [
+          'Agendamea, WCAG 2.1 AA kontrast hedefleri ve tam klavye navigasyonu gözetilerek tasarlanmıştır: N (yeni görev), / veya Ctrl+K (arama), Alt+Yukarı/Aşağı (sıralama) ve Esc (kapatma).',
+        ],
+      },
+      {
+        heading: '2. Çoklu Dil ve Sağdan Sola (RTL) Yazım Desteği',
+        paragraphs: [
+          'Uygulama 73 dili ve Arapça, Farsça, İbranice, Urduca gibi sağdan sola (RTL) yazılan diller için otomatik yönlendirmeyi destekler.',
+        ],
+      },
+      {
+        heading: '3. Microsoft Store Sertifikasyon ve Destek İletişimi',
+        paragraphs: [
+          'Web Sitesi: https://vellium.dev · E-posta Destek: support@vellium.dev · GitHub: https://github.com/emirtdede/Agendamea',
+        ],
+      },
+    ],
+  },
+};
 
-  if (isTr) {
-    return {
-      privacy: {
-        id: 'privacy',
-        title: dict.legalPrivacyTitle,
-        subtitle: dict.legalLastUpdated,
-        sections: [
-          {
-            heading: '1. Yerel Öncelikli (Offline-First) Veri Mimarisi',
-            paragraphs: [
-              'Agendamea, Vellium (vellium.dev) tarafından gizlilik öncelikli olarak geliştirilmiştir. Oluşturduğunuz tüm görevler, başlangıç ve bitiş tarihleri, alt görevler, notlar, kategoriler ve tema tercihleri yalnızca kendi bilgisayarınızda (%APPDATA%\\Agendamea dizininde) yerel olarak saklanır.',
-              'Hiçbir görev veriniz uzak bir bulut sunucusuna gönderilmez, üçüncü taraflarla paylaşılmaz veya reklam/profilleme amacıyla işlenmez.',
-            ],
-          },
-          {
-            heading: '2. Telemetri, İzleme ve Analitik Yokluğu',
-            paragraphs: [
-              'Agendamea içinde hiçbir kullanıcı izleme kodu, analitik izleyicisi, reklam kimliği veya davranışsal telemetri bulunmaz. Uygulama internet bağlantısı olmadan tam kapasiteyle çalışır.',
-            ],
-          },
-          {
-            heading: '3. Güncelleme Kontrolü ve Dış Bağlantılar',
-            paragraphs: [
-              'Otomatik güncelleme kontrolü açık olduğunda veya manuel olarak "Güncellemeleri Kontrol Et" düğmesine bastığınızda, uygulama yalnızca en son sürüm numarasını doğrulamak amacıyla GitHub Releases (api.github.com/repos/emirtdede/Agendamea/releases/latest) adresine standart bir HTTPS sorgusu gönderir. Bu sorguda kişisel veri gönderilmez. Otomatik kontrolü Ayarlar içinden dilediğiniz zaman kapatabilirsiniz.',
-            ],
-          },
-          {
-            heading: '4. Veri Taşınabilirliği ve Kalıcı Silme Kontrolü',
-            paragraphs: [
-              'Verilerinizi dilediğiniz an Ayarlar > Veri ve Yedekleme bölümünden yedek dosyası olarak bilgisayarınıza indirebilir veya geri yükleyebilirsiniz. Uygulamayı Windows Denetim Masası veya Ayarlar üzerinden kaldırırken "Kullanıcı verilerini de sil" seçeneğini işaretleyerek tüm yerel kayıtlarınızı kalıcı olarak temizleyebilirsiniz.',
-            ],
-          },
+export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
+  privacy: {
+    id: 'privacy',
+    title: EN_DICTIONARY.legalPrivacyTitle,
+    subtitle: EN_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Local-First (Offline-First) Data Architecture',
+        paragraphs: [
+          'Agendamea is built by Vellium (vellium.dev) with a strict local-first privacy architecture. All tasks, optional start and due dates, subtasks, notes, categories, and theme settings you create are stored exclusively on your own device (%APPDATA%\\Agendamea).',
+          'None of your task data is ever transmitted to external cloud servers, sold to third parties, or used for advertising or profiling.',
         ],
       },
-      terms: {
-        id: 'terms',
-        title: dict.legalTermsTitle,
-        subtitle: dict.legalLastUpdated,
-        sections: [
-          {
-            heading: '1. Lisans Kapsamı ve Kullanım Hakkı',
-            paragraphs: [
-              'Agendamea, Vellium tarafından MIT Açık Kaynak Lisansı ve Microsoft Store Standart Uygulama Lisans Koşulları çerçevesinde sunulmaktadır. Uygulamayı kişisel ve ticari görev yönetimi amacıyla cihazlarınızda ücretsiz olarak kurabilir ve kullanabilirsiniz.',
-            ],
-          },
-          {
-            heading: '2. Kullanıcı Sorumluluğu ve Yedekleme',
-            paragraphs: [
-              'Veriler tamamen kullanıcının kendi cihazında yerel olarak tutulduğundan, cihaz arızası veya işletim sistemi sıfırlaması gibi durumlara karşı Ayarlar > Yedek İndir özelliğiyle düzenli yedek almak kullanıcının sorumluluğundadır.',
-            ],
-          },
-          {
-            heading: '3. Garanti Reddi ve Sorumluluk Sınırı',
-            paragraphs: [
-              'Yazılım, yürürlükteki yasaların izin verdiği azami ölçüde, açık veya zımni herhangi bir garanti olmaksızın "olduğu gibi" (AS-IS) sunulmaktadır. Vellium, yazılımın kullanımından veya kullanılamamasından doğabilecek dolaylı ya da doğrudan veri kayıplarından sorumlu tutulamaz.',
-            ],
-          },
-          {
-            heading: '4. Fikri Mülkiyet',
-            paragraphs: [
-              'Agendamea adı, amblemi ve Vellium markası Vellium (vellium.dev) bünyesine aittir.',
-            ],
-          },
+      {
+        heading: '2. Zero Telemetry, Tracking, or Analytics',
+        paragraphs: [
+          'Agendamea contains no analytics trackers, advertising identifiers, or behavioral telemetry. The application operates with full capability completely offline.',
         ],
       },
-      gdpr: {
-        id: 'gdpr',
-        title: dict.legalKvkkGdprTitle,
-        subtitle: dict.legalLastUpdated,
-        sections: [
-          {
-            heading: '1. Veri Sorumlusu ve İşleme Amacı',
-            paragraphs: [
-              '6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve Avrupa Birliği Genel Veri Koruma Tüzüğü (GDPR) kapsamında Vellium, kullanıcı cihazında tutulan görev verilerine uzaktan erişmez ve merkezi bir veri tabanında kişisel veri toplamaz.',
-            ],
-          },
-          {
-            heading: '2. Yerel Depolama ve Güvenlik',
-            paragraphs: [
-              'Tüm uygulama ayarları (dil tercihi, renk teması, sıralama kilidi) ve görev kayıtları yalnızca cihazınızın işletim sistemi kullanıcı profili altında saklanır. Yerel ağ dışından erişime kapalıdır (yalnızca 127.0.0.1 geri döngü arayüzü).',
-            ],
-          },
-          {
-            heading: '3. İlgili Kişi Hakları (Erişim, Düzeltme, Silme ve Taşıma)',
-            paragraphs: [
-              'Tüm veriler cihazınızda olduğundan; verilerinize anında erişme, düzenleme, Çöp Kutusu üzerinden kalıcı olarak silme ve dışa aktarma (veri taşınabilirliği) haklarınızı doğrudan uygulama arayüzünden herhangi bir başvuruya gerek kalmaksızın kullanabilirsiniz.',
-            ],
-          },
+      {
+        heading: '3. Update Checks & Data Portability',
+        paragraphs: [
+          'Update checks make a standard read-only HTTPS request to GitHub Releases (api.github.com/repos/emirtdede/Agendamea/releases/latest) without personal data. You can export, restore, or permanently delete all local data at any time.',
         ],
       },
-      opensource: {
-        id: 'opensource',
-        title: dict.legalOpenSourceTitle,
-        subtitle: dict.legalLastUpdated,
-        sections: [
-          {
-            heading: '1. Agendamea Lisansı (MIT)',
-            paragraphs: [
-              'Copyright © 2026 Vellium (https://vellium.dev). Bu yazılım MIT Lisansı altında lisanslanmıştır.',
-            ],
-          },
-          {
-            heading: '2. Üçüncü Taraf Açık Kaynak Bileşenleri',
-            paragraphs: [
-              'Agendamea aşağıdaki açık kaynaklı kütüphaneleri kendi lisans koşullarına uygun olarak kullanır:',
-              '• Electron (MIT License) - Masaüstü uygulama çalışma zamanı',
-              '• React & React DOM (MIT License) - Kullanıcı arayüzü kütüphanesi',
-              '• Better-SQLite3 & SQLite (MIT / Public Domain) - Yerel veri motoru',
-              '• Express (MIT License) - Yerel geri döngü sunucu katmanı',
-              '• Tailwind CSS (MIT License) - Stil ve tasarım sistemi',
-              '• Lucide React (ISC License) - Vektörel simge seti',
-              '• Vite & Vite Plugin PWA (MIT License) - Derleme ve çevrimdışı çalışma altyapısı',
-            ],
-          },
+    ],
+  },
+  terms: {
+    id: 'terms',
+    title: EN_DICTIONARY.legalTermsTitle,
+    subtitle: EN_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. License Grant & Permitted Use',
+        paragraphs: [
+          'Agendamea is provided by Vellium under the MIT License and the Microsoft Store Standard Application License Terms for personal and commercial task management.',
         ],
       },
-      accessibility: {
-        id: 'accessibility',
-        title: dict.legalAccessibilityTitle,
-        subtitle: dict.legalLastUpdated,
-        sections: [
-          {
-            heading: '1. Klavye ve Ekran Okuyucu Erişilebilirliği',
-            paragraphs: [
-              'Agendamea, WCAG 2.1 AA kontrast hedefleri ve tam klavye navigasyonu gözetilerek tasarlanmıştır. N (yeni görev), / veya Ctrl+K (arama), Alt+Yukarı/Aşağı (görev sırası taşıma) ve Esc (panel/pencere kapatma) kısayolları ile fareye ihtiyaç duyulmadan kullanılabilir.',
-            ],
-          },
-          {
-            heading: '2. Çoklu Dil ve Sağdan Sola (RTL) Yazım Desteği',
-            paragraphs: [
-              'Uygulama 73 dili ve Arapça, Farsça, İbranice, Urduca gibi sağdan sola (RTL) yazılan diller için otomatik yönlendirmeyi destekler.',
-            ],
-          },
-          {
-            heading: '3. Microsoft Store Sertifikasyon ve Destek İletişimi',
-            paragraphs: [
-              'Agendamea, Windows 10/11 güvenlik, temiz kurulum/kaldırma ve yerel veri izolasyonu standartlarına tam uyumludur.',
-              'Web Sitesi: https://vellium.dev · E-posta Destek: support@vellium.dev · GitHub: https://github.com/emirtdede/Agendamea',
-            ],
-          },
+      {
+        heading: '2. User Data & Backup Responsibility',
+        paragraphs: [
+          'Because all records reside locally on your device without cloud synchronization, you are responsible for maintaining periodic backups using the Download Backup feature in Settings.',
         ],
       },
-    };
-  }
-
-  return {
-    privacy: {
-      id: 'privacy',
-      title: dict.legalPrivacyTitle,
-      subtitle: dict.legalLastUpdated,
-      sections: [
-        {
-          heading: '1. Local-First (Offline-First) Data Architecture',
-          paragraphs: [
-            'Agendamea is built by Vellium (vellium.dev) with a strict local-first privacy architecture. All tasks, optional start and due dates, subtasks, notes, categories, and theme settings you create are stored exclusively on your own device (%APPDATA%\\Agendamea).',
-            'None of your task data is ever transmitted to external cloud servers, sold to third parties, or used for advertising or profiling.',
-          ],
-        },
-        {
-          heading: '2. Zero Telemetry, Tracking, or Analytics',
-          paragraphs: [
-            'Agendamea contains no analytics trackers, advertising identifiers, or behavioral telemetry. The application operates with full capability completely offline.',
-          ],
-        },
-        {
-          heading: '3. Update Checks & External Requests',
-          paragraphs: [
-            'When Automatic Update Check is enabled or when you manually click "Check for Updates", Agendamea makes a standard read-only HTTPS request to GitHub Releases (api.github.com/repos/emirtdede/Agendamea/releases/latest) solely to check if a newer version is available. No personal data is transmitted. You can disable automatic update checks at any time in Settings.',
-          ],
-        },
-        {
-          heading: '4. Data Portability & Complete Deletion Control',
-          paragraphs: [
-            'You can export or restore all your data at any time via Settings > Data & Backup. When uninstalling Agendamea on Windows, you can select the "Also delete user data" option to permanently remove all local data files from your computer.',
-          ],
-        },
-      ],
-    },
-    terms: {
-      id: 'terms',
-      title: dict.legalTermsTitle,
-      subtitle: dict.legalLastUpdated,
-      sections: [
-        {
-          heading: '1. License Grant & Permitted Use',
-          paragraphs: [
-            'Agendamea is provided by Vellium under the MIT License and the Microsoft Store Standard Application License Terms. You are granted a non-exclusive, worldwide, royalty-free license to install and use the application for personal or commercial task management.',
-          ],
-        },
-        {
-          heading: '2. User Data & Backup Responsibility',
-          paragraphs: [
-            'Because all records reside locally on your device without cloud synchronization, you are responsible for maintaining periodic backups of your data using the built-in Download Backup feature in Settings.',
-          ],
-        },
-        {
-          heading: '3. Disclaimer of Warranties & Limitation of Liability',
-          paragraphs: [
-            'To the maximum extent permitted by applicable law, the software is provided "AS IS" without warranty of any kind. Vellium shall not be liable for any direct, indirect, or incidental damages or data loss arising from the use of the software.',
-          ],
-        },
-        {
-          heading: '4. Intellectual Property',
-          paragraphs: [
-            'The Agendamea name, emblem, and Vellium brand identity are property of Vellium (vellium.dev).',
-          ],
-        },
-      ],
-    },
-    gdpr: {
-      id: 'gdpr',
-      title: dict.legalKvkkGdprTitle,
-      subtitle: dict.legalLastUpdated,
-      sections: [
-        {
-          heading: '1. Data Controller & Local Processing',
-          paragraphs: [
-            'Under the EU General Data Protection Regulation (GDPR), UK GDPR, and Turkish KVKK (Law No. 6698), Vellium does not collect, host, or remotely process personal user data on central servers.',
-          ],
-        },
-        {
-          heading: '2. Local Storage & Loopback Security',
-          paragraphs: [
-            'All application preferences (language, theme, drag lock) and task records are stored strictly within your operating system user profile and served only over the local loopback interface (127.0.0.1) with strict origin and CSRF protections.',
-          ],
-        },
-        {
-          heading: '3. Exercise of Data Subject Rights',
-          paragraphs: [
-            'Because all data is stored directly on your device, you have immediate, self-service control over your right of access, rectification, permanent erasure (via Empty Trash or Uninstaller data wipe), and data portability (via Backup Download) directly within the application.',
-          ],
-        },
-      ],
-    },
-    opensource: {
-      id: 'opensource',
-      title: dict.legalOpenSourceTitle,
-      subtitle: dict.legalLastUpdated,
-      sections: [
-        {
-          heading: '1. Agendamea License (MIT)',
-          paragraphs: [
-            'Copyright © 2026 Vellium (https://vellium.dev). Released under the MIT License.',
-          ],
-        },
-        {
-          heading: '2. Third-Party Open Source Attributions',
-          paragraphs: [
-            'Agendamea incorporates the following open source software components in accordance with their respective licenses:',
-            '• Electron (MIT License) - Desktop application runtime',
-            '• React & React DOM (MIT License) - User interface library',
-            '• Better-SQLite3 & SQLite (MIT / Public Domain) - Local storage engine',
-            '• Express (MIT License) - Local loopback application server',
-            '• Tailwind CSS (MIT License) - Design and styling framework',
-            '• Lucide React (ISC License) - Vector icon library',
-            '• Vite & Vite Plugin PWA (MIT License) - Bundler and offline worker runtime',
-          ],
-        },
-      ],
-    },
-    accessibility: {
-      id: 'accessibility',
-      title: dict.legalAccessibilityTitle,
-      subtitle: dict.legalLastUpdated,
-      sections: [
-        {
-          heading: '1. Keyboard Navigation & Screen Reader Support',
-          paragraphs: [
-            'Agendamea is engineered for WCAG 2.1 AA contrast compliance, semantic ARIA landmarks, and complete keyboard operation: N (focus new task), / or Ctrl+K (search), Alt+Up/Down (reorder selected task), and Esc (close panel or dialog).',
-          ],
-        },
-        {
-          heading: '2. 73-Language & Right-to-Left (RTL) Support',
-          paragraphs: [
-            'The interface supports 73 world languages with automatic document direction switching for right-to-left (RTL) scripts including Arabic, Persian, Hebrew, and Urdu.',
-          ],
-        },
-        {
-          heading: '3. Microsoft Store Compliance & Publisher Support',
-          paragraphs: [
-            'Agendamea complies with Windows 10/11 desktop integration, clean install/uninstall lifecycle, and local data isolation requirements.',
-            'Website: https://vellium.dev · Support Email: support@vellium.dev · GitHub: https://github.com/emirtdede/Agendamea',
-          ],
-        },
-      ],
-    },
-  };
-}
+      {
+        heading: '3. Disclaimer of Warranties & Intellectual Property',
+        paragraphs: [
+          'The software is provided "AS IS" without warranty of any kind. The Agendamea name, emblem, and Vellium brand identity are property of Vellium (vellium.dev).',
+        ],
+      },
+    ],
+  },
+  gdpr: {
+    id: 'gdpr',
+    title: EN_DICTIONARY.legalKvkkGdprTitle,
+    subtitle: EN_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Data Controller & Local Processing',
+        paragraphs: [
+          'Under GDPR, UK GDPR, and KVKK, Vellium does not collect, host, or remotely process personal user data on central servers.',
+        ],
+      },
+      {
+        heading: '2. Local Storage & Loopback Security',
+        paragraphs: [
+          'All application preferences and task records are stored strictly within your operating system user profile and served only over the local loopback interface (127.0.0.1).',
+        ],
+      },
+      {
+        heading: '3. Exercise of Data Subject Rights',
+        paragraphs: [
+          'Because all data is stored directly on your device, you have immediate self-service control over access, rectification, permanent erasure, and data portability directly within the application.',
+        ],
+      },
+    ],
+  },
+  opensource: {
+    id: 'opensource',
+    title: EN_DICTIONARY.legalOpenSourceTitle,
+    subtitle: EN_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Agendamea License (MIT)',
+        paragraphs: [
+          'Copyright © 2026 Vellium (https://vellium.dev). Released under the MIT License.',
+        ],
+      },
+      {
+        heading: '2. Third-Party Open Source Attributions',
+        paragraphs: [
+          '• Electron (MIT License) · React & React DOM (MIT License) · Better-SQLite3 & SQLite (MIT / Public Domain) · Express (MIT License) · Tailwind CSS (MIT License) · Lucide React (ISC License) · Vite & Vite Plugin PWA (MIT License)',
+        ],
+      },
+    ],
+  },
+  accessibility: {
+    id: 'accessibility',
+    title: EN_DICTIONARY.legalAccessibilityTitle,
+    subtitle: EN_DICTIONARY.legalLastUpdated,
+    sections: [
+      {
+        heading: '1. Keyboard Navigation & Screen Reader Support',
+        paragraphs: [
+          'Agendamea is engineered for WCAG 2.1 AA contrast compliance and complete keyboard operation: N (new task), / or Ctrl+K (search), Alt+Up/Down (reorder), and Esc (close).',
+        ],
+      },
+      {
+        heading: '2. 73-Language & Right-to-Left (RTL) Support',
+        paragraphs: [
+          'The interface supports 73 world languages with automatic document direction switching for right-to-left (RTL) scripts including Arabic, Persian, Hebrew, and Urdu.',
+        ],
+      },
+      {
+        heading: '3. Microsoft Store Compliance & Publisher Support',
+        paragraphs: [
+          'Website: https://vellium.dev · Support Email: support@vellium.dev · GitHub: https://github.com/emirtdede/Agendamea',
+        ],
+      },
+    ],
+  },
+};

@@ -1,5 +1,7 @@
 import React from 'react';
 import { RotateCcw } from 'lucide-react';
+import { readInitialLanguage } from '../i18n/I18nContext';
+import { getDictionary } from '../i18n/localesWorld';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -28,14 +30,17 @@ export class ErrorBoundary extends React.Component<
 
   override render() {
     if (this.state.hasError) {
+      const { code } = readInitialLanguage();
+      const t = getDictionary(code);
+
       return (
         <div className="flex h-full w-full items-center justify-center bg-[var(--canvas)] p-6 text-[var(--text-primary)]">
           <div className="max-w-sm rounded-2xl border border-[var(--border-strong)] bg-[var(--surface)] p-6 text-center shadow-lg space-y-3">
             <h1 className="font-display text-lg font-bold tracking-tight">
-              Beklenmeyen bir hata oluştu
+              {t.operationFailedToast}
             </h1>
             <p className="text-sm text-[var(--text-muted)]">
-              Verileriniz bilgisayarınızda güvenle saklanıyor. Sayfayı yenileyerek kaldığınız yerden devam edebilirsiniz.
+              {t.settingsSubtitle}
             </p>
             <button
               type="button"
@@ -44,7 +49,7 @@ export class ErrorBoundary extends React.Component<
               style={{ backgroundColor: 'var(--accent)', color: 'var(--accent-fg)' }}
             >
               <RotateCcw className="h-4 w-4" />
-              <span>Uygulamayı Yenile</span>
+              <span>{t.retry}</span>
             </button>
           </div>
         </div>

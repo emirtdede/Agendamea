@@ -31,6 +31,7 @@ import {
   type LanguageCode,
 } from './i18n/languages';
 import { getDictionary } from './i18n/localesWorld';
+import { localizeErrorMessage } from './i18n/translations';
 import type {
   ActiveView,
   Category,
@@ -81,10 +82,6 @@ function readInitialSidebarCollapsed(): boolean {
   } catch {
     return false;
   }
-}
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 export default function App() {
@@ -165,8 +162,20 @@ export default function App() {
   trashedCategoriesRef.current = trashedCategories;
   const sidebarCollapsedRef = useRef(sidebarCollapsed);
   sidebarCollapsedRef.current = sidebarCollapsed;
+  const langRef = useRef(language);
+  langRef.current = language;
   const tRef = useRef(t);
   tRef.current = t;
+
+  const formatUiError = useCallback((err: unknown, fallback?: string): string => {
+    const dict = tRef.current;
+    return localizeErrorMessage(
+      err,
+      fallback ?? dict.operationFailedToast,
+      langRef.current,
+      dict,
+    );
+  }, []);
 
   useEffect(() => {
     applyThemeToDocument(themeId, themeMode);
@@ -230,14 +239,14 @@ export default function App() {
       setLoadError(null);
     } catch (err) {
       if (!silent) {
-        setLoadError(errorMessage(err, 'Veriler yüklenemedi.'));
+        setLoadError(formatUiError(err, tRef.current.loadFailedError));
       }
     } finally {
       if (!silent) {
         setIsLoading(false);
       }
     }
-  }, []);
+  }, [formatUiError]);
 
   useEffect(() => {
     void loadData(false);
@@ -452,10 +461,10 @@ export default function App() {
       themeDirtyRef.current = true;
       setThemeMode(nextMode);
       void api.updateSettings({ themeMode: nextMode }).catch((err) => {
-        showInfoToast(errorMessage(err, 'Tema modu kaydedilemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
       });
     },
-    [showInfoToast],
+    [showInfoToast, formatUiError],
   );
 
   const handleThemeChange = useCallback(
@@ -463,10 +472,10 @@ export default function App() {
       themeDirtyRef.current = true;
       setThemeId(nextId);
       void api.updateSettings({ themeId: nextId }).catch((err) => {
-        showInfoToast(errorMessage(err, 'Renk teması kaydedilemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
       });
     },
-    [showInfoToast],
+    [showInfoToast, formatUiError],
   );
 
   const handleChangeLanguage = useCallback(
@@ -474,20 +483,20 @@ export default function App() {
       langDirtyRef.current = true;
       setLanguage(nextLang);
       void api.updateSettings({ language: nextLang }).catch((err) => {
-        showInfoToast(errorMessage(err, 'Dil tercihi kaydedilemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
       });
     },
-    [showInfoToast],
+    [showInfoToast, formatUiError],
   );
 
   const handleToggleAutoUpdateCheck = useCallback(
     (enabled: boolean) => {
       setAutoUpdateCheck(enabled);
       void api.updateSettings({ autoUpdateCheck: enabled }).catch((err) => {
-        showInfoToast(errorMessage(err, 'Güncelleme ayarı kaydedilemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
       });
     },
-    [showInfoToast],
+    [showInfoToast, formatUiError],
   );
 
   const handleToggleSidebarCollapse = useCallback(() => {
@@ -512,11 +521,11 @@ export default function App() {
         );
         setActiveView({ type: 'category', id: created.id });
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Kategori oluşturulamadı.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         throw err;
       }
     },
-    [showInfoToast],
+    [showInfoToast, formatUiError],
   );
 
   const handleUpdateCategory = useCallback(
@@ -531,14 +540,14 @@ export default function App() {
           );
         }
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Kategori güncellenemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         if (categoryUpdateSeqRef.current.get(id) === seq) {
           void loadData(true);
         }
         throw err;
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handleTogglePinCategory = useCallback(
@@ -556,13 +565,13 @@ export default function App() {
           );
         }
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Kategori sabitlemesi güncellenemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         if (categoryUpdateSeqRef.current.get(id) === seq) {
           void loadData(true);
         }
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handleDeleteCategory = useCallback(
@@ -578,12 +587,12 @@ export default function App() {
         );
         showUndoToast('category', id, tRef.current.categoryMovedToTrashToast);
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Kategori silinemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
         throw err;
       }
     },
-    [showUndoToast, showInfoToast, loadData],
+    [showUndoToast, showInfoToast, loadData, formatUiError],
   );
 
   const handleRestoreCategory = useCallback(
@@ -598,13 +607,13 @@ export default function App() {
           sortCategoriesWithPin([...prev.filter((c) => c.id !== id), restored]),
         );
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Kategori geri yüklenemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
       } finally {
         pendingTrashOpsRef.current.delete(opKey);
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handlePermanentDeleteCategory = useCallback(
@@ -623,13 +632,13 @@ export default function App() {
           prev.map((tItem) => (tItem.categoryId === id ? { ...tItem, categoryId: null } : tItem)),
         );
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Kategori kalıcı olarak silinemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
       } finally {
         pendingTrashOpsRef.current.delete(opKey);
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handleAddTodo = useCallback(
@@ -646,11 +655,11 @@ export default function App() {
         const created = await api.createTodo(payload);
         setTodos((prev) => [created, ...prev.filter((tItem) => tItem.id !== created.id)]);
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Görev eklenemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         throw err;
       }
     },
-    [showInfoToast],
+    [showInfoToast, formatUiError],
   );
 
   const handleUpdateTodo = useCallback(
@@ -687,14 +696,14 @@ export default function App() {
         }
         return true;
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Görev güncellenemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         if (todoUpdateSeqRef.current.get(id) === seq) {
           void loadData(true);
         }
         return false;
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handleDeleteTodo = useCallback(
@@ -721,7 +730,7 @@ export default function App() {
         })
         .catch((err) => {
           clearUndoToast();
-          showInfoToast(errorMessage(err, 'Görev çöp kutusuna taşınamadı.'), 'error');
+          showInfoToast(formatUiError(err), 'error');
           void loadData(true);
           return false;
         })
@@ -731,7 +740,7 @@ export default function App() {
 
       pendingDeletesRef.current.set(id, deletePromise);
     },
-    [showUndoToast, clearUndoToast, showInfoToast, loadData],
+    [showUndoToast, clearUndoToast, showInfoToast, loadData, formatUiError],
   );
 
   const handleRestoreTodo = useCallback(
@@ -749,13 +758,13 @@ export default function App() {
         setTrashedTodos((prev) => prev.filter((tItem) => tItem.id !== id));
         setTodos((prev) => [restored, ...prev.filter((tItem) => tItem.id !== id)]);
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Görev geri yüklenemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
       } finally {
         pendingTrashOpsRef.current.delete(opKey);
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handlePermanentDeleteTodo = useCallback(
@@ -773,13 +782,13 @@ export default function App() {
         todoUpdateSeqRef.current.delete(id);
         setTrashedTodos((prev) => prev.filter((tItem) => tItem.id !== id));
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Görev kalıcı olarak silinemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
       } finally {
         pendingTrashOpsRef.current.delete(opKey);
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handleUndoSoftDelete = useCallback(async () => {
@@ -816,11 +825,11 @@ export default function App() {
         ]);
         setSelectedTodoId((prev) => (prev && trashedIds.has(prev) ? null : prev));
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Tamamlananlar taşınamadı.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
       }
     },
-    [activeView, showInfoToast, loadData],
+    [activeView, showInfoToast, loadData, formatUiError],
   );
 
   const handleEmptyTrash = useCallback(async () => {
@@ -845,12 +854,12 @@ export default function App() {
         );
       }
     } catch (err) {
-      showInfoToast(errorMessage(err, 'Çöp kutusu boşaltılamadı.'), 'error');
+      showInfoToast(formatUiError(err), 'error');
       void loadData(true);
     } finally {
       isEmptyingTrashRef.current = false;
     }
-  }, [clearUndoToast, showInfoToast, loadData]);
+  }, [clearUndoToast, showInfoToast, loadData, formatUiError]);
 
   const handleImportBackup = useCallback(
     async (payload: unknown) => {
@@ -901,11 +910,11 @@ export default function App() {
         );
         return true;
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Alt görev eklenemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         return false;
       }
     },
-    [showInfoToast],
+    [showInfoToast, formatUiError],
   );
 
   const handleToggleSubtask = useCallback(
@@ -933,12 +942,12 @@ export default function App() {
           !pendingSubtaskDeletesRef.current.has(subtaskId) &&
           subtaskUpdateSeqRef.current.get(subtaskId) === seq
         ) {
-          showInfoToast(errorMessage(err, 'Alt görev güncellenemedi.'), 'error');
+          showInfoToast(formatUiError(err), 'error');
           void loadData(true);
         }
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handleDeleteSubtask = useCallback(
@@ -957,13 +966,13 @@ export default function App() {
       try {
         await api.deleteSubtask(subtaskId);
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Alt görev silinemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
       } finally {
         pendingSubtaskDeletesRef.current.delete(subtaskId);
       }
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const categoryMap = useMemo(
@@ -1013,11 +1022,11 @@ export default function App() {
         setTodoDropTarget(null);
       }
       void api.updateSettings({ dragLocked: locked }).catch((err) => {
-        showInfoToast(errorMessage(err, 'Sürükleme kilidi kaydedilemedi.'), 'error');
+        showInfoToast(formatUiError(err), 'error');
         void loadData(true);
       });
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const handleReorderCategories = useCallback(
@@ -1032,12 +1041,12 @@ export default function App() {
       );
       void api.reorderCategories(orderedIds).catch((err) => {
         if (reorderCatSeqRef.current === seq) {
-          showInfoToast(errorMessage(err, 'Kategori sıralaması kaydedilemedi.'), 'error');
+          showInfoToast(formatUiError(err), 'error');
           void loadData(true);
         }
       });
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   const isCompletedView = activeView.type === 'smart' && activeView.id === 'completed';
@@ -1095,12 +1104,12 @@ export default function App() {
       reorderTodoSeqRef.current = seq;
       void api.reorderTodos(nextOrderedIds).catch((err) => {
         if (reorderTodoSeqRef.current === seq) {
-          showInfoToast(errorMessage(err, 'Görev sıralaması kaydedilemedi.'), 'error');
+          showInfoToast(formatUiError(err), 'error');
           void loadData(true);
         }
       });
     },
-    [showInfoToast, loadData],
+    [showInfoToast, loadData, formatUiError],
   );
 
   keyboardReorderRef.current = (direction: 'up' | 'down') => {

@@ -211,6 +211,13 @@ export function normalizeTurkish(text: string): string {
   return text.toLocaleLowerCase('tr-TR').trim();
 }
 
+function matchesMultilingualSearch(haystack: string, qTr: string, qStd: string): boolean {
+  return (
+    normalizeTurkish(haystack).includes(qTr) ||
+    haystack.toLowerCase().trim().includes(qStd)
+  );
+}
+
 export function filterAndSortTodos(params: {
   todos: Todo[];
   activeView: ActiveView;
@@ -229,6 +236,7 @@ export function filterAndSortTodos(params: {
   } = params;
 
   const q = normalizeTurkish(searchQuery);
+  const qStd = searchQuery.toLowerCase().trim();
 
   const filtered = todos.filter((todo) => {
     // View scoping
@@ -250,11 +258,11 @@ export function filterAndSortTodos(params: {
       if (statusFilter === 'completed' && !todo.completed) return false;
     }
 
-    // Search query matching title, notes, or subtasks
+    // Search query matching title, notes, or subtasks (supports both Turkish İ/ı and international I/i)
     if (q.length > 0) {
-      const inTitle = normalizeTurkish(todo.title).includes(q);
-      const inNotes = normalizeTurkish(todo.notes).includes(q);
-      const inSubtasks = todo.subtasks.some((s) => normalizeTurkish(s.title).includes(q));
+      const inTitle = matchesMultilingualSearch(todo.title, q, qStd);
+      const inNotes = matchesMultilingualSearch(todo.notes, q, qStd);
+      const inSubtasks = todo.subtasks.some((s) => matchesMultilingualSearch(s.title, q, qStd));
       if (!inTitle && !inNotes && !inSubtasks) return false;
     }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../i18n/I18nContext';
 import { CATEGORY_COLORS, isValidHexColor, normalizeHexColor } from '../utils/themes';
 
 interface CategoryColorPickerProps {
@@ -12,6 +13,7 @@ export function CategoryColorPicker({
   onChange,
   ariaLabel,
 }: CategoryColorPickerProps) {
+  const { t, getCategoryColorDisplayName } = useI18n();
   const [hexDraft, setHexDraft] = useState(value.toUpperCase());
   const [isEditingHex, setIsEditingHex] = useState(false);
 
@@ -62,14 +64,15 @@ export function CategoryColorPicker({
       >
         {CATEGORY_COLORS.map(({ hex, name }) => {
           const isSelected = value.toLowerCase() === hex.toLowerCase();
+          const localizedColorName = getCategoryColorDisplayName(hex, name);
           return (
             <button
               key={hex}
               type="button"
               role="radio"
               aria-checked={isSelected}
-              aria-label={`Renk seç: ${name}`}
-              title={name}
+              aria-label={`${t.selectColorLabel}: ${localizedColorName}`}
+              title={localizedColorName}
               onClick={() => handleDirectSelect(hex)}
               className={`h-5 w-5 rounded-full border border-black/20 dark:border-white/25 transition-transform ${
                 isSelected
@@ -85,16 +88,16 @@ export function CategoryColorPicker({
       {/* Custom Visual Color Picker + Hex Code Input */}
       <div className="flex items-center gap-2">
         <label
-          title="Özel renk seç"
+          title={t.customColorTitle}
           className="relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-[var(--border-strong)]"
           style={{ backgroundColor: safePickerValue }}
         >
-          <span className="sr-only">Renk paletinden seç</span>
+          <span className="sr-only">{t.customColorTitle}</span>
           <input
             type="color"
             value={safePickerValue}
             onChange={(e) => handleDirectSelect(e.target.value)}
-            aria-label="Renk paletinden özel renk seç"
+            aria-label={t.customColorTitle}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
         </label>
@@ -107,7 +110,7 @@ export function CategoryColorPicker({
           placeholder="#2563EB"
           maxLength={7}
           spellCheck={false}
-          aria-label="Özel renk kodu (HEX)"
+          aria-label={t.customColorHexLabel}
           className="h-7 flex-1 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 font-mono-tabular text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:border-[var(--border-strong)] focus:outline-none"
         />
       </div>

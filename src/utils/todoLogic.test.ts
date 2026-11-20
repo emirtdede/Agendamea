@@ -20,8 +20,15 @@ import {
   sortCategoriesWithPin,
 } from './todoLogic';
 import { isValidLanguageCode, SUPPORTED_LANGUAGES } from '../i18n/languages';
-import { getDictionary } from '../i18n/localesWorld';
-import { getLegalDocuments } from '../i18n/translations';
+import { getDictionary, getLegalDocuments } from '../i18n/localesWorld';
+import {
+  EN_DICTIONARY,
+  localizeErrorMessage,
+  resolveCategoryColorName,
+  resolveThemeColorName,
+  TR_DICTIONARY,
+  type UiDictionary,
+} from '../i18n/translations';
 import {
   CATEGORY_COLORS,
   COLOR_THEMES,
@@ -1027,5 +1034,165 @@ test('QA: Optional start-end dates, 73-language i18n, legal documents & semver u
   assert.equal(compareSemver('1.1.0', '1.0.9'), 1);
   assert.equal(compareSemver('1.0.0', '1.0.2'), -1);
 });
+
+test('QA: Zero language leakage across all 73 languages, UI components, color names, legal docs & international search', () => {
+  const requiredKeys = Object.keys(TR_DICTIONARY) as Array<keyof UiDictionary>;
+  assert.ok(requiredKeys.length >= 170, 'UiDictionary must contain all 171 localized UI keys');
+
+  // Sentence/phrase keys that must NEVER fall back to English in non-English languages
+  // or to Turkish in non-Turkish languages
+  const sentenceCheckKeys: Array<keyof UiDictionary> = [
+    'allTasks',
+    'emptySearchTitle',
+    'emptySearchDesc',
+    'emptyCompletedTitle',
+    'emptyCompletedDesc',
+    'emptyListTitle',
+    'emptyListDesc',
+    'settingsSubtitle',
+    'backupRestoreDesc',
+    'trashIntroDesc',
+    'trashEmptyTitle',
+    'trashEmptyDesc',
+    'upToDateLabel',
+    'autoUpdateToggleDesc',
+    'offlineBannerText',
+    'todoMovedToTrashToast',
+    'categoryMovedToTrashToast',
+    'backupRestoredToast',
+    'windowClose',
+    'operationFailedToast',
+    'loadFailedError',
+  ];
+
+  for (const langMeta of SUPPORTED_LANGUAGES) {
+    const dict = getDictionary(langMeta.code);
+
+    // 1. Every single key in UiDictionary must be non-empty string
+    for (const key of requiredKeys) {
+      assert.equal(typeof dict[key], 'string', `Missing string key ${String(key)} in ${langMeta.code}`);
+      assert.ok(dict[key].trim().length > 0, `Empty key ${String(key)} in ${langMeta.code}`);
+    }
+
+    // 2. Zero English sentence leakage in non-English languages & zero Turkish leakage in non-Turkish languages
+    if (langMeta.code !== 'en') {
+      for (const sKey of sentenceCheckKeys) {
+        assert.notEqual(
+          dict[sKey],
+          EN_DICTIONARY[sKey],
+          `English leakage detected in [${langMeta.code}] for key "${String(sKey)}": "${dict[sKey]}"`,
+        );
+      }
+    }
+    if (langMeta.code !== 'tr') {
+      for (const sKey of sentenceCheckKeys) {
+        assert.notEqual(
+          dict[sKey],
+          TR_DICTIONARY[sKey],
+          `Turkish leakage detected in [${langMeta.code}] for key "${String(sKey)}": "${dict[sKey]}"`,
+        );
+      }
+    }
+
+    // 3. All 14 theme colors & 8 category colors resolve to non-empty localized names
+    for (const theme of COLOR_THEMES) {
+      const localizedThemeName = resolveThemeColorName(theme.id, theme.name, dict);
+      assert.ok(localizedThemeName.trim().length > 0);
+      if (langMeta.code !== 'tr') {
+        // Ensure non-TR languages don't leak Turkish-only color names like "Kırmızı" or "Kehribar"
+        assert.notEqual(localizedThemeName, 'Kırmızı');
+        assert.notEqual(localizedThemeName, 'Kehribar');
+      }
+    }
+    for (const catColor of CATEGORY_COLORS) {
+      const localizedCatColor = resolveCategoryColorName(catColor.hex, catColor.name, dict);
+      assert.ok(localizedCatColor.trim().length > 0);
+      if (langMeta.code !== 'tr') {
+        assert.notEqual(localizedCatColor, 'Kırmızı');
+        assert.notEqual(localizedCatColor, 'Beyaz');
+      }
+    }
+
+    // 4. Legal documents must be localized in the target language (zero English leakage in non-English)
+    const docs = getLegalDocuments(langMeta.code, dict);
+    if (langMeta.code !== 'en') {
+      assert.notEqual(
+        docs.privacy.sections[0].paragraphs[0],
+        'Agendamea is built by Vellium (vellium.dev) with a strict local-first privacy architecture. All tasks, optional start and due dates, subtasks, notes, categories, and theme settings you create are stored exclusively on your own device (%APPDATA%\\Agendamea).',
+        `English legal paragraph leaked in [${langMeta.code}] privacy policy`,
+      );
+    }
+
+    // 5. localizeErrorMessage never leaks raw Turkish server errors into non-Turkish locales
+    if (langMeta.code !== 'tr') {
+      const errMsg = localizeErrorMessage(
+        new Error('Sunucu ile bağlantı kurulamadı.'),
+        dict.operationFailedToast,
+        langMeta.code,
+        dict,
+      );
+      assert.equal(errMsg, dict.operationFailedToast);
+    }
+  }
+
+  // 6. Multilingual search matches both Turkish İ/ı and international I/i (e.g. "Install" <-> "install")
+  const intlTodos: Todo[] = [
+    {
+      id: 'intl-1',
+      title: 'Install Windows Update',
+      notes: 'Important deployment note',
+      completed: false,
+      important: true,
+      pinned: false,
+      priority: 'high',
+      startDate: null,
+      dueDate: null,
+      categoryId: null,
+      sortOrder: 0,
+      createdAt: '2026-11-20T10:00:00.000Z',
+      updatedAt: '2026-11-20T10:00:00.000Z',
+      deletedAt: null,
+      subtasks: [],
+    },
+  ];
+  const matchedLower = filterAndSortTodos({
+    todos: intlTodos,
+    activeView: { type: 'smart', id: 'all' },
+    statusFilter: 'all',
+    searchQuery: 'install',
+    sortBy: 'manual',
+  });
+  assert.equal(matchedLower.length, 1, 'Lowercase "install" must match uppercase "Install"');
+  const matchedUpper = filterAndSortTodos({
+    todos: intlTodos,
+    activeView: { type: 'smart', id: 'all' },
+    statusFilter: 'all',
+    searchQuery: 'IMPORTANT',
+    sortBy: 'manual',
+  });
+  assert.equal(matchedUpper.length, 1, 'Uppercase "IMPORTANT" must match "Important"');
+
+  // 7. Static source scan of all React components & App.tsx for zero hardcoded Turkish characters
+  const componentDir = path.join(process.cwd(), 'src', 'components');
+  const componentFiles = fs
+    .readdirSync(componentDir)
+    .filter((f) => f.endsWith('.tsx'))
+    .map((f) => path.join(componentDir, f));
+  componentFiles.push(path.join(process.cwd(), 'src', 'App.tsx'));
+
+  const trCharRegex = /[ğüşıöçĞÜŞİÖÇ]/;
+  for (const filePath of componentFiles) {
+    const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+      assert.ok(
+        !trCharRegex.test(line),
+        `Hardcoded Turkish character found in ${path.basename(filePath)}:${idx + 1} -> ${trimmed}`,
+      );
+    });
+  }
+});
+
 
 

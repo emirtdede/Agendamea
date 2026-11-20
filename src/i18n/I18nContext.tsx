@@ -6,11 +6,12 @@ import {
   type LanguageCode,
   type LanguageMeta,
 } from './languages';
-import { getDictionary } from './localesWorld';
+import { getDictionary, getLegalDocumentsForLanguage } from './localesWorld';
 import {
-  getLegalDocuments,
-  THEME_NAME_TRANSLATIONS,
+  resolveCategoryColorName,
+  resolveThemeColorName,
   TR_DICTIONARY,
+  TR_LEGAL_DOCUMENTS,
   type LegalDocId,
   type LegalDocumentContent,
   type UiDictionary,
@@ -23,6 +24,7 @@ interface I18nContextValue {
   languages: readonly LanguageMeta[];
   onChangeLanguage: (code: LanguageCode) => void;
   getThemeDisplayName: (themeId: string, fallbackName: string) => string;
+  getCategoryColorDisplayName: (hex: string, fallbackName: string) => string;
   legalDocs: Record<LegalDocId, LegalDocumentContent>;
 }
 
@@ -34,8 +36,10 @@ const I18nContext = createContext<I18nContextValue>({
   t: TR_DICTIONARY,
   languages: SUPPORTED_LANGUAGES,
   onChangeLanguage: () => {},
-  getThemeDisplayName: (_id, fallback) => fallback,
-  legalDocs: getLegalDocuments('tr', TR_DICTIONARY),
+  getThemeDisplayName: (themeId, fallback) => resolveThemeColorName(themeId, fallback, TR_DICTIONARY),
+  getCategoryColorDisplayName: (hex, fallback) =>
+    resolveCategoryColorName(hex, fallback, TR_DICTIONARY),
+  legalDocs: TR_LEGAL_DOCUMENTS,
 });
 
 export function readInitialLanguage(): {
@@ -64,19 +68,20 @@ export function I18nProvider({
 }) {
   const meta = useMemo(() => getLanguageMeta(lang), [lang]);
   const dict = useMemo(() => getDictionary(lang), [lang]);
-  const legalDocs = useMemo(() => getLegalDocuments(lang, dict), [lang, dict]);
+  const legalDocs = useMemo(() => getLegalDocumentsForLanguage(lang, dict), [lang, dict]);
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.documentElement.lang = meta.code;
       document.documentElement.dir = meta.dir;
+      document.title = `Agendamea - ${dict.appTitleSuffix}`;
     }
     try {
       localStorage.setItem('agendamea-language', meta.code);
     } catch {
       // Ignore storage errors
     }
-  }, [meta]);
+  }, [meta, dict.appTitleSuffix]);
 
   const value = useMemo<I18nContextValue>(
     () => ({
@@ -85,11 +90,10 @@ export function I18nProvider({
       t: dict,
       languages: SUPPORTED_LANGUAGES,
       onChangeLanguage,
-      getThemeDisplayName: (themeId: string, fallbackName: string) => {
-        const entry = THEME_NAME_TRANSLATIONS[themeId];
-        if (!entry) return fallbackName;
-        return meta.code === 'tr' ? entry.tr : entry.en;
-      },
+      getThemeDisplayName: (themeId: string, fallbackName: string) =>
+        resolveThemeColorName(themeId, fallbackName, dict),
+      getCategoryColorDisplayName: (hex: string, fallbackName: string) =>
+        resolveCategoryColorName(hex, fallbackName, dict),
       legalDocs,
     }),
     [meta, dict, onChangeLanguage, legalDocs],

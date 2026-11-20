@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useI18n } from '../i18n/I18nContext';
-import type { LegalDocId } from '../i18n/translations';
+import { localizeErrorMessage, type LegalDocId } from '../i18n/translations';
 import type { Category, ThemeId, ThemeMode, Todo, UpdateCheckResult } from '../types';
 import { COLOR_THEMES } from '../utils/themes';
 import { ColorDot } from './ColorDot';
@@ -97,7 +97,7 @@ export function SettingsModal({
   onPermanentDeleteCategory,
   onEmptyTrash,
 }: SettingsModalProps) {
-  const { t, meta, getThemeDisplayName, legalDocs } = useI18n();
+  const { lang, t, meta, getThemeDisplayName, legalDocs } = useI18n();
   const [activeTab, setActiveTab] = useState<'general' | 'trash'>('general');
   const [activeLegalDoc, setActiveLegalDoc] = useState<LegalDocId | null>(null);
   const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false);
@@ -187,7 +187,7 @@ export function SettingsModal({
     setPendingImport(null);
 
     if (file.size > MAX_IMPORT_BYTES) {
-      setImportError('Seçilen yedek dosyası 5 MB sınırını aşıyor.');
+      setImportError(t.importSizeExceededError);
       return;
     }
 
@@ -195,7 +195,7 @@ export function SettingsModal({
       const text = await file.text();
       const parsed: unknown = JSON.parse(text);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setImportError('Seçilen dosya geçerli bir Agendamea yedeği değil.');
+        setImportError(t.importInvalidBackupError);
         return;
       }
       const record = parsed as Record<string, unknown>;
@@ -217,7 +217,7 @@ export function SettingsModal({
         summary: summaryParts.join(' · '),
       });
     } catch {
-      setImportError('Seçilen dosya geçerli bir yedek dosyası değil.');
+      setImportError(t.importInvalidBackupError);
     }
   };
 
@@ -230,7 +230,7 @@ export function SettingsModal({
       setPendingImport(null);
     } catch (err) {
       setImportError(
-        err instanceof Error ? err.message : 'Yedek geri yüklenemedi.',
+        localizeErrorMessage(err, t.importRestoreFailedError, lang, t),
       );
     } finally {
       setIsImporting(false);
@@ -310,11 +310,10 @@ export function SettingsModal({
                   setActiveTab('general');
                   setConfirmEmptyTrash(false);
                 }}
-                className={`rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'general'
+                className={`rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'general'
                     ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
+                  }`}
               >
                 {t.tabGeneral}
               </button>
@@ -323,11 +322,10 @@ export function SettingsModal({
                 role="tab"
                 aria-selected={activeTab === 'trash'}
                 onClick={() => setActiveTab('trash')}
-                className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'trash'
+                className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'trash'
                     ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
+                  }`}
               >
                 <span>{t.tabTrash}</span>
                 {trashCount > 0 && (
@@ -363,11 +361,10 @@ export function SettingsModal({
                     type="button"
                     onClick={() => onChangeMode('light')}
                     aria-pressed={themeMode === 'light'}
-                    className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                      themeMode === 'light'
+                    className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors whitespace-nowrap ${themeMode === 'light'
                         ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
                         : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
+                      }`}
                   >
                     <Sun className="h-4 w-4" />
                     <span>{t.lightMode}</span>
@@ -376,11 +373,10 @@ export function SettingsModal({
                     type="button"
                     onClick={() => onChangeMode('dark')}
                     aria-pressed={themeMode === 'dark'}
-                    className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                      themeMode === 'dark'
+                    className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors whitespace-nowrap ${themeMode === 'dark'
                         ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] shadow-xs'
                         : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
+                      }`}
                   >
                     <Moon className="h-4 w-4" />
                     <span>{t.darkMode}</span>
@@ -408,11 +404,10 @@ export function SettingsModal({
                         type="button"
                         onClick={() => onChangeTheme(theme.id)}
                         aria-pressed={isSelected}
-                        className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-[13px] font-medium transition-colors ${
-                          isSelected
+                        className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-[13px] font-medium transition-colors ${isSelected
                             ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
                             : 'border-[var(--border)] bg-[var(--canvas)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
-                        }`}
+                          }`}
                       >
                         <span className="flex items-center gap-2 min-w-0">
                           <span
@@ -513,11 +508,10 @@ export function SettingsModal({
                       aria-checked={!dragLocked}
                       aria-label={t.dragReorderTitle}
                       onClick={() => onToggleDragLock(!dragLocked)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                        dragLocked
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${dragLocked
                           ? 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
                           : 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                      }`}
+                        }`}
                     >
                       {dragLocked ? (
                         <>
@@ -832,11 +826,10 @@ export function SettingsModal({
                           >
                             <div className="min-w-0">
                               <p
-                                className={`truncate text-sm font-medium ${
-                                  todo.completed
+                                className={`truncate text-sm font-medium ${todo.completed
                                     ? 'line-through text-[var(--text-muted)]'
                                     : 'text-[var(--text-primary)]'
-                                }`}
+                                  }`}
                               >
                                 {todo.title}
                               </p>

@@ -283,7 +283,7 @@ export const UpdateAndLanguageSection = React.memo(function UpdateAndLanguageSec
                   : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
               }`}
             >
-              <span>{autoUpdateCheck ? t.unlockedBadge : t.lockedBadge}</span>
+              <span>{autoUpdateCheck ? t.enabledBadge : t.disabledBadge}</span>
             </button>
           </div>
         </div>
