@@ -469,39 +469,42 @@ export class TodoDatabase {
   }
 
   updateCategory(id: string, patch: CategoryPatch): Category | null {
-    const existing = this.db
-      .prepare('SELECT * FROM categories WHERE id = ? AND deleted_at IS NULL')
-      .get(id) as CategoryRow | undefined;
-    if (!existing) return null;
+    const tx = this.db.transaction((): Category | null => {
+      const existing = this.db
+        .prepare('SELECT * FROM categories WHERE id = ? AND deleted_at IS NULL')
+        .get(id) as CategoryRow | undefined;
+      if (!existing) return null;
 
-    let nextName = existing.name;
-    if (typeof patch.name === 'string') {
-      const trimmed = patch.name.trim().slice(0, MAX_CATEGORY_NAME_LEN);
-      if (!trimmed) {
-        throw new ValidationError('Kategori adı boş olamaz.');
+      let nextName = existing.name;
+      if (typeof patch.name === 'string') {
+        const trimmed = patch.name.trim().slice(0, MAX_CATEGORY_NAME_LEN);
+        if (!trimmed) {
+          throw new ValidationError('Kategori adı boş olamaz.');
+        }
+        nextName = trimmed;
       }
-      nextName = trimmed;
-    }
-    const nextColor =
-      typeof patch.color === 'string'
-        ? sanitizeColor(patch.color, existing.color)
-        : existing.color;
-    const nextPinned =
-      typeof patch.pinned === 'boolean' ? (patch.pinned ? 1 : 0) : existing.pinned;
+      const nextColor =
+        typeof patch.color === 'string'
+          ? sanitizeColor(patch.color, existing.color)
+          : existing.color;
+      const nextPinned =
+        typeof patch.pinned === 'boolean' ? (patch.pinned ? 1 : 0) : existing.pinned;
 
-    this.db
-      .prepare('UPDATE categories SET name = ?, color = ?, pinned = ? WHERE id = ?')
-      .run(nextName, nextColor, nextPinned, id);
+      this.db
+        .prepare('UPDATE categories SET name = ?, color = ?, pinned = ? WHERE id = ?')
+        .run(nextName, nextColor, nextPinned, id);
 
-    return {
-      id: existing.id,
-      name: nextName,
-      color: nextColor,
-      pinned: Boolean(nextPinned),
-      sortOrder: existing.sort_order,
-      createdAt: existing.created_at,
-      deletedAt: null,
-    };
+      return {
+        id: existing.id,
+        name: nextName,
+        color: nextColor,
+        pinned: Boolean(nextPinned),
+        sortOrder: existing.sort_order,
+        createdAt: existing.created_at,
+        deletedAt: null,
+      };
+    });
+    return tx();
   }
 
   // Soft delete category (preserves todo category_id links so restoring reconnects tasks)
@@ -643,79 +646,82 @@ export class TodoDatabase {
   }
 
   updateTodo(id: string, patch: TodoPatch): Todo | null {
-    const existing = this.db
-      .prepare('SELECT * FROM todos WHERE id = ? AND deleted_at IS NULL')
-      .get(id) as TodoRow | undefined;
-    if (!existing) return null;
+    const tx = this.db.transaction((): Todo | null => {
+      const existing = this.db
+        .prepare('SELECT * FROM todos WHERE id = ? AND deleted_at IS NULL')
+        .get(id) as TodoRow | undefined;
+      if (!existing) return null;
 
-    let title = existing.title;
-    if (typeof patch.title === 'string') {
-      const trimmed = patch.title.trim().slice(0, MAX_TODO_TITLE_LEN);
-      if (!trimmed) {
-        throw new ValidationError('Görev başlığı boş olamaz.');
+      let title = existing.title;
+      if (typeof patch.title === 'string') {
+        const trimmed = patch.title.trim().slice(0, MAX_TODO_TITLE_LEN);
+        if (!trimmed) {
+          throw new ValidationError('Görev başlığı boş olamaz.');
+        }
+        title = trimmed;
       }
-      title = trimmed;
-    }
-    const notes =
-      typeof patch.notes === 'string'
-        ? patch.notes.slice(0, MAX_TODO_NOTES_LEN)
-        : existing.notes;
-    const completed =
-      typeof patch.completed === 'boolean' ? (patch.completed ? 1 : 0) : existing.completed;
-    const important =
-      typeof patch.important === 'boolean' ? (patch.important ? 1 : 0) : existing.important;
-    const pinned =
-      typeof patch.pinned === 'boolean' ? (patch.pinned ? 1 : 0) : existing.pinned;
-    const priority = sanitizePriority(patch.priority, existing.priority);
+      const notes =
+        typeof patch.notes === 'string'
+          ? patch.notes.slice(0, MAX_TODO_NOTES_LEN)
+          : existing.notes;
+      const completed =
+        typeof patch.completed === 'boolean' ? (patch.completed ? 1 : 0) : existing.completed;
+      const important =
+        typeof patch.important === 'boolean' ? (patch.important ? 1 : 0) : existing.important;
+      const pinned =
+        typeof patch.pinned === 'boolean' ? (patch.pinned ? 1 : 0) : existing.pinned;
+      const priority = sanitizePriority(patch.priority, existing.priority);
 
-    let dueDate = existing.due_date;
-    if (patch.dueDate !== undefined) {
-      if (patch.dueDate === null || patch.dueDate === '') {
-        dueDate = null;
-      } else {
-        const sanitized = sanitizeDueDate(patch.dueDate);
-        if (sanitized !== null) {
-          dueDate = sanitized;
+      let dueDate = existing.due_date;
+      if (patch.dueDate !== undefined) {
+        if (patch.dueDate === null || patch.dueDate === '') {
+          dueDate = null;
+        } else {
+          const sanitized = sanitizeDueDate(patch.dueDate);
+          if (sanitized !== null) {
+            dueDate = sanitized;
+          }
         }
       }
-    }
 
-    let categoryId = existing.category_id;
-    if (patch.categoryId !== undefined) {
-      if (patch.categoryId === null || patch.categoryId === '') {
-        categoryId = null;
-      } else if (typeof patch.categoryId === 'string') {
-        const catExists = this.db
-          .prepare('SELECT id FROM categories WHERE id = ? AND deleted_at IS NULL')
-          .get(patch.categoryId);
-        if (catExists) {
-          categoryId = patch.categoryId;
+      let categoryId = existing.category_id;
+      if (patch.categoryId !== undefined) {
+        if (patch.categoryId === null || patch.categoryId === '') {
+          categoryId = null;
+        } else if (typeof patch.categoryId === 'string') {
+          const catExists = this.db
+            .prepare('SELECT id FROM categories WHERE id = ? AND deleted_at IS NULL')
+            .get(patch.categoryId);
+          if (catExists) {
+            categoryId = patch.categoryId;
+          }
         }
       }
-    }
 
-    const updatedAt = new Date().toISOString();
+      const updatedAt = new Date().toISOString();
 
-    this.db
-      .prepare(`
-        UPDATE todos
-        SET title = ?, notes = ?, completed = ?, important = ?, pinned = ?, priority = ?, due_date = ?, category_id = ?, updated_at = ?
-        WHERE id = ?
-      `)
-      .run(
-        title,
-        notes,
-        completed,
-        important,
-        pinned,
-        priority,
-        dueDate,
-        categoryId,
-        updatedAt,
-        id,
-      );
+      this.db
+        .prepare(`
+          UPDATE todos
+          SET title = ?, notes = ?, completed = ?, important = ?, pinned = ?, priority = ?, due_date = ?, category_id = ?, updated_at = ?
+          WHERE id = ?
+        `)
+        .run(
+          title,
+          notes,
+          completed,
+          important,
+          pinned,
+          priority,
+          dueDate,
+          categoryId,
+          updatedAt,
+          id,
+        );
 
-    return this.getTodoById(id);
+      return this.getTodoById(id);
+    });
+    return tx();
   }
 
   // Soft delete todo -> moves to trash
@@ -849,11 +855,6 @@ export class TodoDatabase {
   }
 
   createSubtask(todoId: string, title: string): Subtask | null {
-    const parent = this.db
-      .prepare('SELECT id FROM todos WHERE id = ? AND deleted_at IS NULL')
-      .get(todoId);
-    if (!parent) return null;
-
     if (typeof title !== 'string') {
       throw new ValidationError('Alt görev başlığı geçersiz.');
     }
@@ -862,28 +863,43 @@ export class TodoDatabase {
       throw new ValidationError('Alt görev başlığı boş olamaz.');
     }
 
-    const maxRow = this.db
-      .prepare(
-        'SELECT COALESCE(MAX(sort_order), -1) as maxOrder FROM subtasks WHERE todo_id = ?',
-      )
-      .get(todoId) as { maxOrder: number };
+    const tx = this.db.transaction((): Subtask | null => {
+      const parent = this.db
+        .prepare('SELECT id FROM todos WHERE id = ? AND deleted_at IS NULL')
+        .get(todoId);
+      if (!parent) return null;
 
-    const id = crypto.randomUUID();
-    const sortOrder = maxRow.maxOrder + 1;
+      const statsRow = this.db
+        .prepare(
+          'SELECT COUNT(*) as subCount, COALESCE(MAX(sort_order), -1) as maxOrder FROM subtasks WHERE todo_id = ?',
+        )
+        .get(todoId) as { subCount: number; maxOrder: number };
 
-    this.db
-      .prepare(
-        'INSERT INTO subtasks (id, todo_id, title, completed, sort_order) VALUES (?, ?, ?, 0, ?)',
-      )
-      .run(id, todoId, trimmed, sortOrder);
+      if (statsRow.subCount >= MAX_SUBTASKS_PER_TODO) {
+        throw new ValidationError(
+          `Bir görevde en fazla ${MAX_SUBTASKS_PER_TODO} alt görev bulunabilir.`,
+        );
+      }
 
-    return {
-      id,
-      todoId,
-      title: trimmed,
-      completed: false,
-      sortOrder,
-    };
+      const id = crypto.randomUUID();
+      const sortOrder = statsRow.maxOrder + 1;
+
+      this.db
+        .prepare(
+          'INSERT INTO subtasks (id, todo_id, title, completed, sort_order) VALUES (?, ?, ?, 0, ?)',
+        )
+        .run(id, todoId, trimmed, sortOrder);
+
+      return {
+        id,
+        todoId,
+        title: trimmed,
+        completed: false,
+        sortOrder,
+      };
+    });
+
+    return tx();
   }
 
   updateSubtask(id: string, patch: SubtaskPatch): Subtask | null {
@@ -1153,6 +1169,12 @@ export class TodoDatabase {
   }
 
   close(): void {
+    try {
+      // Flush WAL frames into the primary database file cleanly on shutdown
+      this.db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Ignore for :memory: or already-closed handles
+    }
     this.db.close();
   }
 }

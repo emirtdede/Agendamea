@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 chcp 65001 >nul
 title Agendamea — Windows 11 Kurulum Derleyici (Vellium)
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo.
 echo  =========================================================
@@ -115,7 +115,7 @@ echo  =========================================================
 echo.
 
 if exist "release" (
-  start "" explorer.exe "%~dp0release"
+  start "" explorer.exe "%~dp0..\release"
 )
 
 pause

@@ -97,6 +97,14 @@ export function SettingsModal({
     summary: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const trashCount = trashedCategories.length + trashedTodos.length;
 
@@ -111,12 +119,14 @@ export function SettingsModal({
       try {
         await op();
       } finally {
-        setBusyTrashIds((prev) => {
-          if (!prev.has(key)) return prev;
-          const next = new Set(prev);
-          next.delete(key);
-          return next;
-        });
+        if (isMountedRef.current) {
+          setBusyTrashIds((prev) => {
+            if (!prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+        }
       }
     },
     [],

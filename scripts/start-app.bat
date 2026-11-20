@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 chcp 65001 >nul
 title Agendamea — Yapilacaklar Uygulamasi
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo.
 echo  =============================================

@@ -20,6 +20,20 @@ function isLoopbackAddress(remoteAddress: string | undefined): boolean {
   );
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === '127.0.0.1' || normalized === 'localhost' || normalized === '::1' || normalized === '[::1]';
+}
+
+function parseHostHeaderHostname(hostHeader: string | undefined): string | null {
+  if (!hostHeader) return null;
+  try {
+    return new URL(`http://${hostHeader}`).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 function sendRouteError(
   res: express.Response,
   routeLabel: string,
@@ -43,18 +57,65 @@ async function startServer() {
   const HOST = process.env.HOST || (process.platform === 'win32' ? '127.0.0.1' : '0.0.0.0');
 
   app.disable('x-powered-by');
-  app.use((_req, res, next) => {
+  const isLoopbackServer = isLoopbackHostname(HOST);
+  app.use((req, res, next) => {
+    // Prevent DNS rebinding when bound to local desktop loopback
+    if (isLoopbackServer) {
+      const hostName = parseHostHeaderHostname(req.headers.host);
+      if (hostName && !isLoopbackHostname(hostName)) {
+        res.status(403).json({ error: 'Geçersiz ana bilgisayar başlığı.' });
+        return;
+      }
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (!process.env.CSP_HEADER_VALUE) {
       res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     }
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (process.env.NODE_ENV === 'production' && !process.env.CSP_HEADER_VALUE) {
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'",
+      );
+    }
     next();
   });
 
   app.use(express.json({ limit: '5mb' }));
   app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+
+    const isMutation =
+      req.method === 'POST' ||
+      req.method === 'PATCH' ||
+      req.method === 'PUT' ||
+      req.method === 'DELETE';
+
+    if (isMutation) {
+      // Block cross-site browser requests (CSRF / simple-request protection on localhost API)
+      const fetchSite = req.headers['sec-fetch-site'];
+      if (typeof fetchSite === 'string' && fetchSite.toLowerCase() === 'cross-site') {
+        res.status(403).json({ error: 'Siteler arası API isteği reddedildi.' });
+        return;
+      }
+      const origin = req.headers.origin;
+      if (typeof origin === 'string' && origin.length > 0) {
+        try {
+          const originUrl = new URL(origin);
+          const reqHost = parseHostHeaderHostname(req.headers.host);
+          const originHost = originUrl.hostname.toLowerCase();
+          if (!isLoopbackHostname(originHost) && originHost !== reqHost) {
+            res.status(403).json({ error: 'Yetkisiz kaynak üzerinden istek reddedildi.' });
+            return;
+          }
+        } catch {
+          res.status(403).json({ error: 'Geçersiz Origin başlığı.' });
+          return;
+        }
+      }
+    }
+
     if (
       (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT') &&
       req.body !== undefined &&

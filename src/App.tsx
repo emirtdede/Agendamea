@@ -133,8 +133,13 @@ export default function App() {
   // Sequence counters per entity prevent out-of-order PATCH responses from overwriting newer edits
   const todoUpdateSeqRef = useRef<Map<string, number>>(new Map());
   const categoryUpdateSeqRef = useRef<Map<string, number>>(new Map());
-  // Tracks in-flight soft deletes so immediate Undo waits for DELETE before calling POST /restore
-  const pendingDeletesRef = useRef<Map<string, Promise<unknown>>>(new Map());
+  const subtaskUpdateSeqRef = useRef<Map<string, number>>(new Map());
+  const reorderCatSeqRef = useRef(0);
+  const reorderTodoSeqRef = useRef(0);
+  // Tracks in-flight soft deletes so immediate Undo & Empty Trash await DELETE first (resolves true iff delete succeeded)
+  const pendingDeletesRef = useRef<Map<string, Promise<boolean>>>(new Map());
+  const pendingSubtaskDeletesRef = useRef<Set<string>>(new Set());
+  const isEmptyingTrashRef = useRef(false);
   // Prevents duplicate concurrent restore/permanent-delete requests per trash item
   const pendingTrashOpsRef = useRef<Set<string>>(new Set());
   // Prevents an in-flight initial bootstrap from overwriting theme/sidebar preferences just changed by the user
@@ -142,6 +147,10 @@ export default function App() {
   const sidebarDirtyRef = useRef(false);
   const todosRef = useRef(todos);
   todosRef.current = todos;
+  const trashedCategoriesRef = useRef(trashedCategories);
+  trashedCategoriesRef.current = trashedCategories;
+  const sidebarCollapsedRef = useRef(sidebarCollapsed);
+  sidebarCollapsedRef.current = sidebarCollapsed;
 
   // Single authoritative effect for applying theme tokens & syncing localStorage cache
   useEffect(() => {
@@ -233,7 +242,9 @@ export default function App() {
       scheduleFocus(() => searchInputRef.current?.focus(), 80);
       return;
     }
-    if (sidebarCollapsed) {
+    if (sidebarCollapsedRef.current) {
+      sidebarDirtyRef.current = true;
+      sidebarCollapsedRef.current = false;
       setSidebarCollapsed(false);
       try {
         localStorage.setItem('agendamea-sidebar-collapsed', 'false');
@@ -245,13 +256,28 @@ export default function App() {
       return;
     }
     searchInputRef.current?.focus();
-  }, [sidebarCollapsed, scheduleFocus]);
+  }, [scheduleFocus]);
 
   // Global keyboard shortcuts (including Alt+ArrowUp/Down accessible task reordering)
   const keyboardReorderRef = useRef<((direction: 'up' | 'down') => void) | null>(null);
+  const keyStateRef = useRef({
+    isSettingsOpen,
+    isMobileSidebarOpen,
+    selectedTodoId,
+    searchQuery,
+    focusSidebarSearch,
+  });
+  keyStateRef.current = {
+    isSettingsOpen,
+    isMobileSidebarOpen,
+    selectedTodoId,
+    searchQuery,
+    focusSidebarSearch,
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const state = keyStateRef.current;
       const target = e.target as HTMLElement | null;
       const isTypingField =
         target &&
@@ -262,24 +288,24 @@ export default function App() {
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        focusSidebarSearch();
+        state.focusSidebarSearch();
         return;
       }
 
       if (e.key === 'Escape') {
-        if (isSettingsOpen) {
+        if (state.isSettingsOpen) {
           setIsSettingsOpen(false);
-        } else if (isMobileSidebarOpen) {
+        } else if (state.isMobileSidebarOpen) {
           setIsMobileSidebarOpen(false);
-        } else if (selectedTodoId) {
+        } else if (state.selectedTodoId) {
           setSelectedTodoId(null);
-        } else if (searchQuery) {
+        } else if (state.searchQuery) {
           setSearchQuery('');
         }
         return;
       }
 
-      if (isTypingField || isSettingsOpen) return;
+      if (isTypingField || state.isSettingsOpen) return;
 
       if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
@@ -289,7 +315,7 @@ export default function App() {
 
       if (e.key === '/') {
         e.preventDefault();
-        focusSidebarSearch();
+        state.focusSidebarSearch();
       } else if (e.key.toLowerCase() === 'n') {
         e.preventDefault();
         quickAddRef.current?.focus();
@@ -298,7 +324,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSettingsOpen, isMobileSidebarOpen, selectedTodoId, searchQuery, focusSidebarSearch]);
+  }, []);
 
   // Theme handlers (instant state + keepalive SQLite save)
   const handleModeChange = useCallback(
@@ -325,16 +351,15 @@ export default function App() {
 
   const handleToggleSidebarCollapse = useCallback(() => {
     sidebarDirtyRef.current = true;
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('agendamea-sidebar-collapsed', String(next));
-      } catch {
-        // Ignore storage errors
-      }
-      void api.updateSettings({ sidebarCollapsed: next }).catch(() => {});
-      return next;
-    });
+    const next = !sidebarCollapsedRef.current;
+    sidebarCollapsedRef.current = next;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem('agendamea-sidebar-collapsed', String(next));
+    } catch {
+      // Ignore storage errors
+    }
+    void api.updateSettings({ sidebarCollapsed: next }).catch(() => {});
   }, []);
 
   // Category CRUD (instant SQLite save with full error handling)
@@ -454,6 +479,9 @@ export default function App() {
         setTodos((prev) =>
           prev.map((t) => (t.categoryId === id ? { ...t, categoryId: null } : t)),
         );
+        setTrashedTodos((prev) =>
+          prev.map((t) => (t.categoryId === id ? { ...t, categoryId: null } : t)),
+        );
       } catch (err) {
         showInfoToast(errorMessage(err, 'Kategori kalıcı olarak silinemedi.'), 'error');
         void loadData(true);
@@ -552,11 +580,13 @@ export default function App() {
         .deleteTodo(id)
         .then((trashed) => {
           setTrashedTodos((prev) => prev.map((t) => (t.id === id ? trashed : t)));
+          return true;
         })
         .catch((err) => {
           clearUndoToast();
           showInfoToast(errorMessage(err, 'Görev çöp kutusuna taşınamadı.'), 'error');
           void loadData(true);
+          return false;
         })
         .finally(() => {
           pendingDeletesRef.current.delete(id);
@@ -576,7 +606,8 @@ export default function App() {
         // Wait for any in-flight soft delete of this todo to finish before restoring
         const inFlightDelete = pendingDeletesRef.current.get(id);
         if (inFlightDelete) {
-          await inFlightDelete.catch(() => {});
+          const deleteSucceeded = await inFlightDelete;
+          if (!deleteSucceeded) return;
         }
         const restored = await api.restoreTodo(id);
         setTrashedTodos((prev) => prev.filter((t) => t.id !== id));
@@ -599,7 +630,8 @@ export default function App() {
       try {
         const inFlightDelete = pendingDeletesRef.current.get(id);
         if (inFlightDelete) {
-          await inFlightDelete.catch(() => {});
+          const deleteSucceeded = await inFlightDelete;
+          if (!deleteSucceeded) return;
         }
         await api.permanentDeleteTodo(id);
         todoUpdateSeqRef.current.delete(id);
@@ -656,8 +688,14 @@ export default function App() {
   );
 
   const handleEmptyTrash = useCallback(async () => {
+    if (isEmptyingTrashRef.current) return;
+    isEmptyingTrashRef.current = true;
     try {
-      const removedCatIds = new Set(trashedCategories.map((c) => c.id));
+      // Await any in-flight soft deletes so a late DELETE never resurrects a ghost item in trash
+      if (pendingDeletesRef.current.size > 0) {
+        await Promise.allSettled(Array.from(pendingDeletesRef.current.values()));
+      }
+      const removedCatIds = new Set(trashedCategoriesRef.current.map((c) => c.id));
       await api.emptyTrash();
       clearUndoToast();
       setTrashedTodos([]);
@@ -674,8 +712,10 @@ export default function App() {
     } catch (err) {
       showInfoToast(errorMessage(err, 'Çöp kutusu boşaltılamadı.'), 'error');
       void loadData(true);
+    } finally {
+      isEmptyingTrashRef.current = false;
     }
-  }, [trashedCategories, clearUndoToast, showInfoToast, loadData]);
+  }, [clearUndoToast, showInfoToast, loadData]);
 
   const handleImportBackup = useCallback(
     async (payload: unknown) => {
@@ -706,9 +746,9 @@ export default function App() {
     [clearUndoToast, showInfoToast],
   );
 
-  // Subtask CRUD (with full error rollback)
+  // Subtask CRUD (sequence-guarded + full error rollback)
   const handleAddSubtask = useCallback(
-    async (todoId: string, title: string) => {
+    async (todoId: string, title: string): Promise<boolean> => {
       try {
         const created = await api.createSubtask(todoId, title);
         setTodos((prev) =>
@@ -716,8 +756,10 @@ export default function App() {
             t.id === todoId ? { ...t, subtasks: [...t.subtasks, created] } : t,
           ),
         );
+        return true;
       } catch (err) {
         showInfoToast(errorMessage(err, 'Alt görev eklenemedi.'), 'error');
+        return false;
       }
     },
     [showInfoToast],
@@ -725,6 +767,10 @@ export default function App() {
 
   const handleToggleSubtask = useCallback(
     async (todoId: string, subtaskId: string, completed: boolean) => {
+      if (pendingSubtaskDeletesRef.current.has(subtaskId)) return;
+      const seq = (subtaskUpdateSeqRef.current.get(subtaskId) ?? 0) + 1;
+      subtaskUpdateSeqRef.current.set(subtaskId, seq);
+
       setTodos((prev) =>
         prev.map((t) =>
           t.id === todoId
@@ -740,8 +786,13 @@ export default function App() {
       try {
         await api.updateSubtask(subtaskId, { completed });
       } catch (err) {
-        showInfoToast(errorMessage(err, 'Alt görev güncellenemedi.'), 'error');
-        void loadData(true);
+        if (
+          !pendingSubtaskDeletesRef.current.has(subtaskId) &&
+          subtaskUpdateSeqRef.current.get(subtaskId) === seq
+        ) {
+          showInfoToast(errorMessage(err, 'Alt görev güncellenemedi.'), 'error');
+          void loadData(true);
+        }
       }
     },
     [showInfoToast, loadData],
@@ -749,6 +800,10 @@ export default function App() {
 
   const handleDeleteSubtask = useCallback(
     async (todoId: string, subtaskId: string) => {
+      if (pendingSubtaskDeletesRef.current.has(subtaskId)) return;
+      pendingSubtaskDeletesRef.current.add(subtaskId);
+      subtaskUpdateSeqRef.current.delete(subtaskId);
+
       setTodos((prev) =>
         prev.map((t) =>
           t.id === todoId
@@ -761,6 +816,8 @@ export default function App() {
       } catch (err) {
         showInfoToast(errorMessage(err, 'Alt görev silinemedi.'), 'error');
         void loadData(true);
+      } finally {
+        pendingSubtaskDeletesRef.current.delete(subtaskId);
       }
     },
     [showInfoToast, loadData],
@@ -823,6 +880,8 @@ export default function App() {
 
   const handleReorderCategories = useCallback(
     (orderedIds: string[]) => {
+      const seq = reorderCatSeqRef.current + 1;
+      reorderCatSeqRef.current = seq;
       const orderLookup = new Map(orderedIds.map((id, idx) => [id, idx]));
       setCategories((prev) =>
         sortCategoriesWithPin(
@@ -830,8 +889,10 @@ export default function App() {
         ),
       );
       void api.reorderCategories(orderedIds).catch((err) => {
-        showInfoToast(errorMessage(err, 'Kategori sıralaması kaydedilemedi.'), 'error');
-        void loadData(true);
+        if (reorderCatSeqRef.current === seq) {
+          showInfoToast(errorMessage(err, 'Kategori sıralaması kaydedilemedi.'), 'error');
+          void loadData(true);
+        }
       });
     },
     [showInfoToast, loadData],
@@ -890,9 +951,13 @@ export default function App() {
           sortOrder: finalOrderMap.get(t.id) ?? t.sortOrder,
         })),
       );
+      const seq = reorderTodoSeqRef.current + 1;
+      reorderTodoSeqRef.current = seq;
       void api.reorderTodos(nextOrderedIds).catch((err) => {
-        showInfoToast(errorMessage(err, 'Görev sıralaması kaydedilemedi.'), 'error');
-        void loadData(true);
+        if (reorderTodoSeqRef.current === seq) {
+          showInfoToast(errorMessage(err, 'Görev sıralaması kaydedilemedi.'), 'error');
+          void loadData(true);
+        }
       });
     },
     [showInfoToast, loadData],

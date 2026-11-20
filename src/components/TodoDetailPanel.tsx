@@ -14,7 +14,7 @@ interface TodoDetailPanelProps {
     options?: { keepalive?: boolean },
   ) => Promise<boolean>;
   onDelete: (id: string) => void;
-  onAddSubtask: (todoId: string, title: string) => Promise<void>;
+  onAddSubtask: (todoId: string, title: string) => Promise<boolean>;
   onToggleSubtask: (todoId: string, subtaskId: string, completed: boolean) => Promise<void>;
   onDeleteSubtask: (todoId: string, subtaskId: string) => Promise<void>;
 }
@@ -42,7 +42,7 @@ function formatCreatedAt(iso: string): string {
   }
 }
 
-export function TodoDetailPanel({
+export const TodoDetailPanel = React.memo(function TodoDetailPanel({
   todo,
   categories,
   todayStr,
@@ -62,6 +62,7 @@ export function TodoDetailPanel({
   const timerRef = useRef<number | null>(null);
   const isAddingSubtaskRef = useRef(false);
   const skipUnmountFlushRef = useRef(false);
+  const isMountedRef = useRef(true);
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
@@ -86,15 +87,24 @@ export function TodoDetailPanel({
     if (titleChanged) patch.title = trimmedTitle;
     if (notesChanged) patch.notes = nextNotes;
 
-    lastSavedRef.current = {
+    const prevSaved = lastSavedRef.current;
+    const nextSaved = {
       id: targetId,
-      title: titleChanged ? trimmedTitle : lastSavedRef.current.title,
-      notes: notesChanged ? nextNotes : lastSavedRef.current.notes,
+      title: titleChanged ? trimmedTitle : prevSaved.title,
+      notes: notesChanged ? nextNotes : prevSaved.notes,
     };
+    lastSavedRef.current = nextSaved;
 
     void onUpdateRef.current(targetId, patch, keepalive ? { keepalive: true } : undefined).then(
       (ok) => {
-        if (ok && draftRef.current.id === targetId) {
+        if (!ok) {
+          // Revert optimistic snapshot so the user can retry saving the same content
+          if (lastSavedRef.current === nextSaved) {
+            lastSavedRef.current = prevSaved;
+          }
+          return;
+        }
+        if (isMountedRef.current && draftRef.current.id === targetId) {
           setSaveHint('saved');
         }
       },
@@ -166,8 +176,10 @@ export function TodoDetailPanel({
       );
     };
 
+    isMountedRef.current = true;
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      isMountedRef.current = false;
       window.removeEventListener('beforeunload', handleBeforeUnload);
       if (timerRef.current) {
         window.clearTimeout(timerRef.current);
@@ -189,14 +201,19 @@ export function TodoDetailPanel({
     const trimmed = newSubtaskTitle.trim();
     if (!trimmed) return;
 
+    const targetTodoId = todo.id;
     isAddingSubtaskRef.current = true;
     setIsAddingSubtask(true);
-    setNewSubtaskTitle('');
     try {
-      await onAddSubtask(todo.id, trimmed);
+      const ok = await onAddSubtask(targetTodoId, trimmed);
+      if (ok && isMountedRef.current && draftRef.current.id === targetTodoId) {
+        setNewSubtaskTitle('');
+      }
     } finally {
       isAddingSubtaskRef.current = false;
-      setIsAddingSubtask(false);
+      if (isMountedRef.current) {
+        setIsAddingSubtask(false);
+      }
     }
   };
 
@@ -546,4 +563,4 @@ export function TodoDetailPanel({
       </div>
     </aside>
   );
-}
+});

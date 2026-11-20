@@ -877,6 +877,37 @@ test('QA: Windows 11 Electron installer/uninstaller assets, BMP headers, UTF-8 B
   assert.equal(pkg.author.name, 'Vellium');
   assert.equal(pkg.author.email, 'support@vellium.dev');
   assert.equal(pkg.homepage, 'https://vellium.dev');
+  assert.equal(pkg.dependencies['@google/genai'], undefined);
+});
+
+test('QA: Fifth-pass pre-deployment audit hardening - createSubtask cap, transactional updates & export/import round-trip at cap', () => {
+  const db = new TodoDatabase(':memory:');
+  try {
+    const todo = db.createTodo({ title: 'Alt görev limit testi' });
+    for (let i = 0; i < 200; i += 1) {
+      const sub = db.createSubtask(todo.id, `Adım ${i + 1}`);
+      assert.ok(sub);
+    }
+
+    // 201st subtask must throw ValidationError so exported backups always remain re-importable
+    assert.throws(
+      () => db.createSubtask(todo.id, 'Taşan 201. adım'),
+      (err) => err instanceof ValidationError,
+    );
+
+    // Exporting and re-importing at max subtask cap (200) must succeed cleanly
+    const snapshot = db.getBootstrap();
+    const targetDb = new TodoDatabase(':memory:');
+    try {
+      const restored = targetDb.importBackup(snapshot);
+      assert.equal(restored.todos.length, 1);
+      assert.equal(restored.todos[0].subtasks.length, 200);
+    } finally {
+      targetDb.close();
+    }
+  } finally {
+    db.close();
+  }
 });
 
 

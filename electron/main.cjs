@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
 const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
@@ -320,6 +320,12 @@ ipcMain.handle('window:close', (event) => {
 app
   .whenReady()
   .then(async () => {
+    // Deny unexpected browser permission prompts (camera, microphone, geolocation, notifications)
+    session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => {
+      callback(false);
+    });
+    session.defaultSession.setPermissionCheckHandler(() => false);
+
     const port = process.env.PORT ? Number(process.env.PORT) : await getAvailablePort();
     const appUrl = `http://127.0.0.1:${port}`;
     startBackend(port);

@@ -24,7 +24,7 @@ interface QuickAddBarProps {
 
 const PRIORITY_CYCLE: Priority[] = ['normal', 'high', 'low'];
 
-export function QuickAddBar({
+export const QuickAddBar = React.memo(function QuickAddBar({
   inputRef,
   categories,
   todayStr,
@@ -291,4 +291,4 @@ export function QuickAddBar({
       </div>
     </form>
   );
-}
+});
