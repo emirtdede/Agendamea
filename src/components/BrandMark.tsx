@@ -14,16 +14,18 @@ export function BrandMark({ className = 'h-7 w-7' }: BrandMarkProps) {
     >
       <svg
         viewBox="0 0 512 512"
-        className="h-[72%] w-[72%]"
+        className="h-[76%] w-[76%]"
         fill="none"
         stroke="currentColor"
         strokeWidth="44"
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M 136 382 L 250 120 L 296 224" />
-        <path d="M 334 314 L 364 382" />
-        <path d="M 196 290 L 250 342 L 382 194" />
+        <g transform="translate(-4 3)">
+          <path d="M 144 378 L 252 128 L 294 224" />
+          <path d="M 332 312 L 360 378" />
+          <path d="M 202 288 L 252 336 L 376 198" />
+        </g>
       </svg>
     </span>
   );

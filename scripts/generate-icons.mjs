@@ -13,12 +13,12 @@ for (const dir of [PUBLIC_DIR, ICONS_DIR, WINDOWS_DIR, LOGOS_DIR]) {
 }
 
 /**
- * Master Agendamea monogram paths inside a 512x512 coordinate space.
+ * Master Agendamea monogram paths inside a 512x512 coordinate space (optically centered).
  * Combines a geometric architectural "A" with an integrated precision checkmark.
  */
 function monogramPaths(strokeColor = '#ffffff', accentColor = '#ffffff') {
   return `
-    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(-4 3)" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <!-- Left leg + Apex + Upper right shoulder of A -->
       <path d="M 144 378 L 252 128 L 294 224" stroke="${strokeColor}" stroke-width="40" />
       <!-- Lower right foot of A -->
@@ -34,12 +34,12 @@ const masterIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="ag-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1c1c21" />
+      <stop offset="0%" stop-color="#1e1e24" />
       <stop offset="100%" stop-color="#09090b" />
     </linearGradient>
     <linearGradient id="ag-edge" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18" />
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.03" />
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
     </linearGradient>
   </defs>
   <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#ag-bg)" />
@@ -53,7 +53,7 @@ const maskableIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="ag-mask-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1a1a1f" />
+      <stop offset="0%" stop-color="#1e1e24" />
       <stop offset="100%" stop-color="#09090b" />
     </linearGradient>
   </defs>
@@ -67,7 +67,7 @@ const maskableIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
 /** Monochrome Safari pinned tab & Windows monochrome badge SVG */
 const monochromeSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <g fill="none" stroke="#000000" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+  <g transform="translate(-3 5)" fill="none" stroke="#000000" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
     <path d="M 116 404 L 248 98 L 300 216" />
     <path d="M 346 322 L 380 404" />
     <path d="M 186 294 L 248 354 L 402 184" />

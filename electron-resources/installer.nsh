@@ -107,7 +107,8 @@
 !endif
 
 !macro customInstall
-  ; Windows 11 Ayarlar > Yüklü Uygulamalar yayıncı, sürüm ve destek bilgileri
+  ; Windows 11 Ayarlar > Yüklü Uygulamalar ve Denetim Masası yayıncı, ikon ve destek bilgileri
+  WriteRegStr SHCTX "${UNINSTALL_REGISTRY_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
   WriteRegStr SHCTX "${UNINSTALL_REGISTRY_KEY}" "Publisher" "Vellium"
   WriteRegStr SHCTX "${UNINSTALL_REGISTRY_KEY}" "URLInfoAbout" "https://vellium.dev"
   WriteRegStr SHCTX "${UNINSTALL_REGISTRY_KEY}" "HelpLink" "https://vellium.dev"
@@ -115,6 +116,8 @@
   WriteRegStr SHCTX "${UNINSTALL_REGISTRY_KEY}" "Comments" "Günlük görevlerinizi zahmetsizce planlamanız için sade, hızlı ve çevrimdışı çalışan masaüstü görev yöneticisi."
   WriteRegDWORD SHCTX "${UNINSTALL_REGISTRY_KEY}" "NoModify" 1
   WriteRegDWORD SHCTX "${UNINSTALL_REGISTRY_KEY}" "NoRepair" 1
+  ; Windows Explorer ve Denetim Masası simge önbelleğini anında yenile
+  System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
 !macroend
 
 !macro customUnInstall

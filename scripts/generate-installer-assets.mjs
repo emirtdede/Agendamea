@@ -7,11 +7,11 @@ const OUT_DIR = path.join(ROOT, 'electron-resources');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 /**
- * Agendamea architectural monogram paths (512x512 coordinate space).
+ * Agendamea architectural monogram paths (512x512 coordinate space, optically centered).
  */
 function monogramPaths(strokeColor = '#ffffff', accentColor = '#ffffff') {
   return `
-    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(-4 3)" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <path d="M 144 378 L 252 128 L 294 224" stroke="${strokeColor}" stroke-width="40" />
       <path d="M 332 312 L 360 378" stroke="${strokeColor}" stroke-width="40" />
       <path d="M 202 288 L 252 336 L 376 198" stroke="${accentColor}" stroke-width="40" />
@@ -138,9 +138,7 @@ const appIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
   </defs>
   <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#ag-bg)" />
   <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="url(#ag-edge)" stroke-width="4" />
-  <g transform="translate(-4 3)">
-    ${monogramPaths('#ffffff', '#ffffff')}
-  </g>
+  ${monogramPaths('#ffffff', '#ffffff')}
 </svg>
 `;
 
@@ -159,9 +157,7 @@ const installerIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
   </defs>
   <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#inst-bg)" />
   <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="url(#inst-edge)" stroke-width="4" />
-  <g transform="translate(-4 3)">
-    ${monogramPaths('#ffffff', '#ffffff')}
-  </g>
+  ${monogramPaths('#ffffff', '#ffffff')}
 </svg>
 `;
 
@@ -174,15 +170,13 @@ const uninstallerIconSvg = `<?xml version="1.0" encoding="UTF-8"?>
       <stop offset="100%" stop-color="#09090b" />
     </linearGradient>
     <linearGradient id="uninst-edge" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18" />
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2" />
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
     </linearGradient>
   </defs>
   <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#uninst-bg)" />
   <rect x="20" y="20" width="472" height="472" rx="108" fill="none" stroke="url(#uninst-edge)" stroke-width="4" />
-  <g transform="translate(-4 3)">
-    ${monogramPaths('#e4e4e7', '#e4e4e7')}
-  </g>
+  ${monogramPaths('#ffffff', '#ffffff')}
 </svg>
 `;
 
@@ -315,7 +309,7 @@ const installerHeaderSvg = `<?xml version="1.0" encoding="UTF-8"?>
   <rect width="300" height="114" fill="#ffffff" />
   <g transform="translate(22 25)">
     <rect x="0" y="0" width="64" height="64" rx="16" fill="#09090b" />
-    <g transform="translate(3.5 4.3) scale(0.109375)">
+    <g transform="translate(4 4) scale(0.109375)">
       ${monogramPaths('#ffffff', '#ffffff')}
     </g>
   </g>

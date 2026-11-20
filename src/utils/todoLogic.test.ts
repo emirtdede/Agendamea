@@ -845,15 +845,21 @@ test('QA: Windows 11 Electron installer/uninstaller assets, BMP headers, UTF-8 B
     assert.equal(buf.readUInt32LE(30), 0, `${file} must be uncompressed BI_RGB`);
   }
 
-  // 2. Validate Windows multi-resolution ICO headers
+  // 2. Validate Windows multi-resolution ICO headers & full alignment across app/setup/uninstaller/runtime icons
+  const appIcoBuf = fs.readFileSync(path.join(resDir, 'icon.ico'));
   for (const icoFile of ['icon.ico', 'installer.ico', 'uninstaller.ico']) {
     const buf = fs.readFileSync(path.join(resDir, icoFile));
     assert.equal(buf.readUInt16LE(0), 0);
     assert.equal(buf.readUInt16LE(2), 1);
     assert.ok(buf.readUInt16LE(4) >= 7, `${icoFile} should have at least 7 resolutions`);
+    assert.ok(buf.equals(appIcoBuf), `${icoFile} must match icon.ico with clean centered pure-white monogram`);
   }
+  assert.ok(
+    !fs.existsSync(path.join(root, 'public', 'assets', 'aistudio')),
+    'Unused public/assets/aistudio directory must stay removed',
+  );
 
-  // 3. Validate UTF-8 BOM NSIS script & Vellium publisher info
+  // 3. Validate UTF-8 BOM NSIS script, DisplayIcon override, shell cache refresh & Vellium publisher info
   const nshBuf = fs.readFileSync(path.join(resDir, 'installer.nsh'));
   assert.equal(nshBuf[0], 0xef);
   assert.equal(nshBuf[1], 0xbb);
@@ -862,6 +868,8 @@ test('QA: Windows 11 Electron installer/uninstaller assets, BMP headers, UTF-8 B
   assert.ok(nshText.includes('Vellium'));
   assert.ok(nshText.includes('https://vellium.dev'));
   assert.ok(nshText.includes('support@vellium.dev'));
+  assert.ok(nshText.includes('"DisplayIcon" "$INSTDIR\\${APP_EXECUTABLE_FILENAME},0"'));
+  assert.ok(nshText.includes('Shell32::SHChangeNotify'));
 
   // 4. Validate electron-builder.yml & package.json alignment
   const builderYml = fs.readFileSync(path.join(root, 'electron-builder.yml'), 'utf8');

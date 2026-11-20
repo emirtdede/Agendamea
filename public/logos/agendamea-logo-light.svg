@@ -3,7 +3,7 @@
   <g transform="translate(20 20) scale(0.234375)">
     <rect x="16" y="16" width="480" height="480" rx="112" fill="#09090b" />
     
-    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(-4 3)" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <!-- Left leg + Apex + Upper right shoulder of A -->
       <path d="M 144 378 L 252 128 L 294 224" stroke="#ffffff" stroke-width="40" />
       <!-- Lower right foot of A -->
