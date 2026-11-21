@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('agendameaWindow', {
+  isWindowsStore: Boolean(process.windowsStore),
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),

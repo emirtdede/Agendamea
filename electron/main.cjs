@@ -92,7 +92,10 @@ function isAllowedExternalUrl(targetUrl) {
     ) {
       return true;
     }
-    if (parsed.protocol === 'mailto:' && parsed.pathname.toLowerCase() === 'support@vellium.dev') {
+    if (
+      parsed.protocol === 'mailto:' &&
+      parsed.pathname.toLowerCase().endsWith('@vellium.dev')
+    ) {
       return true;
     }
     return false;
@@ -273,9 +276,15 @@ async function createWindow(appUrl) {
   if (ready && mainWindow) {
     await mainWindow.loadURL(appUrl);
   } else if (mainWindow) {
+    const isTrLocale = String(app.getLocale() || 'tr').toLowerCase().startsWith('tr');
+    const htmlLang = isTrLocale ? 'tr' : 'en';
+    const errHeading = isTrLocale ? 'Agendamea başlatılamadı' : 'Unable to start Agendamea';
+    const errBody = isTrLocale
+      ? 'Yerel sunucu başlatılamadı. Lütfen uygulamayı yeniden açın.'
+      : 'The local service could not be started. Please reopen the application.';
     await mainWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(
-        '<!doctype html><html lang="tr"><body style="font-family:Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fafafa;color:#111"><div style="text-align:center"><h2>Agendamea başlatılamadı</h2><p>Yerel sunucu başlatılamadı. Lütfen uygulamayı yeniden açın.</p></div></body></html>',
+        `<!doctype html><html lang="${htmlLang}"><body style="font-family:Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fafafa;color:#111"><div style="text-align:center"><h2>${errHeading}</h2><p>${errBody}</p></div></body></html>`,
       )}`,
     );
     mainWindow.show();
@@ -312,8 +321,8 @@ ipcMain.handle('window:is-maximized', (event) => {
   return win.isMaximized() || win.isFullScreen();
 });
 
-const GITHUB_RELEASES_API = 'https://api.github.com/repos/emirtdede/Agendamea/releases/latest';
-const GITHUB_RELEASES_HTML = 'https://github.com/emirtdede/Agendamea/releases/latest';
+const GITHUB_RELEASES_API = 'https://api.github.com/repos/emirtdede/agendamea/releases/latest';
+const GITHUB_RELEASES_HTML = 'https://github.com/emirtdede/agendamea/releases/latest';
 
 function compareSemver(a, b) {
   const cleanA = String(a || '').trim().replace(/^v/i, '').split('-')[0];
@@ -334,10 +343,11 @@ function isAllowedUpdateDownloadUrl(targetUrl) {
   try {
     const parsed = new URL(targetUrl);
     if (parsed.protocol !== 'https:') return false;
+    const lowerPath = parsed.pathname.toLowerCase();
     if (
       parsed.hostname === 'github.com' &&
-      parsed.pathname.startsWith('/emirtdede/Agendamea/releases/download/') &&
-      parsed.pathname.toLowerCase().endsWith('.exe')
+      lowerPath.startsWith('/emirtdede/agendamea/releases/download/') &&
+      lowerPath.endsWith('.exe')
     ) {
       return true;
     }
@@ -427,6 +437,9 @@ ipcMain.handle('updater:check', async () => {
 });
 
 ipcMain.handle('updater:download-and-install', async (event, downloadUrl) => {
+  if (process.windowsStore) {
+    return { ok: false, storeManaged: true };
+  }
   const win = resolveSenderWindow(event);
   if (typeof downloadUrl !== 'string' || !isAllowedUpdateDownloadUrl(downloadUrl)) {
     void shell.openExternal(GITHUB_RELEASES_HTML);

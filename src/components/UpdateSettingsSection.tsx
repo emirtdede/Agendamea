@@ -158,6 +158,7 @@ export const UpdateAndLanguageSection = React.memo(function UpdateAndLanguageSec
       <div className="h-px bg-[var(--border)]" />
 
       {/* Updates & Version Check (Manual & Automatic) */}
+      {!window.agendameaWindow?.isWindowsStore && (
       <section aria-label={t.updatesSectionTitle} className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-xs font-semibold text-[var(--text-muted)]">
@@ -195,7 +196,7 @@ export const UpdateAndLanguageSection = React.memo(function UpdateAndLanguageSec
                                 : ''
                             }`
                           : updateState.status === 'error'
-                            ? updateState.result?.error || t.updateErrorOfflineLabel
+                            ? t.updateErrorOfflineLabel
                             : formattedCheckedAt
                               ? `${t.lastCheckedPrefix}: ${formattedCheckedAt}`
                               : t.upToDateLabel}
@@ -288,6 +289,7 @@ export const UpdateAndLanguageSection = React.memo(function UpdateAndLanguageSec
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 });

@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useI18n } from '../i18n/I18nContext';
 
 interface NativeWindowBridge {
+  isWindowsStore?: boolean;
   minimize?: () => void | Promise<void>;
   toggleMaximize?: () => void | Promise<boolean | void>;
   close?: () => void | Promise<void>;

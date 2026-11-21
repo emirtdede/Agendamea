@@ -23,6 +23,7 @@ import { COLOR_THEMES } from '../utils/themes';
 import { ColorDot } from './ColorDot';
 import { LegalDocumentView } from './LegalDocumentView';
 import { UpdateAndLanguageSection } from './UpdateSettingsSection';
+import { VelliumLogo } from './VelliumLogo';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -555,7 +556,7 @@ export function SettingsModal({
                         <span>{isImporting ? t.restoringButton : t.restoreButton}</span>
                       </button>
                       <a
-                        href="/api/export"
+                        href={`/api/export?lang=${encodeURIComponent(lang)}`}
                         download
                         className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors whitespace-nowrap"
                       >
@@ -660,13 +661,14 @@ export function SettingsModal({
                 aria-label="Agendamea"
                 className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]"
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
+                  <VelliumLogo className="h-4 w-4 text-[var(--text-primary)] shrink-0" />
                   <span className="font-display font-semibold text-[var(--text-primary)]">
                     Agendamea
                   </span>
                   <span className="font-mono-tabular">v1.0.0</span>
                   <span>·</span>
-                  <span>Vellium</span>
+                  <span>© 2026 Vellium</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <a

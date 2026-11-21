@@ -933,6 +933,8 @@ test('QA: Windows 11 Electron installer/uninstaller assets, BMP headers, UTF-8 B
   assert.equal(pkg.author.name, 'Vellium');
   assert.equal(pkg.author.email, 'support@vellium.dev');
   assert.equal(pkg.homepage, 'https://vellium.dev');
+  assert.equal(pkg.repository.url, 'https://github.com/emirtdede/agendamea.git');
+  assert.equal(pkg.bugs.url, 'https://github.com/emirtdede/agendamea/issues');
   assert.equal(pkg.dependencies['@google/genai'], undefined);
 });
 
@@ -1191,6 +1193,91 @@ test('QA: Zero language leakage across all 73 languages, UI components, color na
         `Hardcoded Turkish character found in ${path.basename(filePath)}:${idx + 1} -> ${trimmed}`,
       );
     });
+  }
+
+  // 8. Zero runtime .replace() hacks in i18n locale seed files and strict Unicode script purity across all 73 languages
+  for (const relFile of ['src/i18n/localesEurope.ts', 'src/i18n/localesAsiaAfrica.ts']) {
+    const srcText = fs.readFileSync(path.join(process.cwd(), relFile), 'utf8');
+    assert.ok(!srcText.includes('.replace('), `Unexpected .replace() hack in ${relFile}`);
+  }
+
+  const expectedScripts: Record<string, RegExp[]> = {
+    ru: [/[\u0400-\u04FF]/],
+    uk: [/[\u0400-\u04FF]/],
+    bg: [/[\u0400-\u04FF]/],
+    sr: [/[\u0400-\u04FF]/],
+    mk: [/[\u0400-\u04FF]/],
+    kk: [/[\u0400-\u04FF]/],
+    ky: [/[\u0400-\u04FF]/],
+    el: [/[\u0370-\u03FF]/],
+    ka: [/[\u10A0-\u10FF]/],
+    hy: [/[\u0530-\u058F]/],
+    ar: [/[\u0600-\u06FF]/],
+    fa: [/[\u0600-\u06FF]/],
+    ur: [/[\u0600-\u06FF]/],
+    he: [/[\u0590-\u05FF]/],
+    hi: [/[\u0900-\u097F]/],
+    mr: [/[\u0900-\u097F]/],
+    ne: [/[\u0900-\u097F]/],
+    bn: [/[\u0980-\u09FF\u0964]/],
+    pa: [/[\u0A00-\u0A7F\u0964]/],
+    gu: [/[\u0A80-\u0AFF]/],
+    ta: [/[\u0B80-\u0BFF]/],
+    te: [/[\u0C00-\u0C7F]/],
+    kn: [/[\u0C80-\u0CFF]/],
+    ml: [/[\u0D00-\u0D7F]/],
+    si: [/[\u0D80-\u0DFF]/],
+    th: [/[\u0E00-\u0E7F]/],
+    lo: [/[\u0E80-\u0EFF]/],
+    my: [/[\u1000-\u109F]/],
+    km: [/[\u1780-\u17FF]/],
+    am: [/[\u1200-\u137F]/],
+    ja: [/[\u3040-\u30FF\u4E00-\u9FFF]/],
+    ko: [/[\uAC00-\uD7AF\u1100-\u11FF]/],
+    'zh-CN': [/[\u4E00-\u9FFF]/],
+    'zh-TW': [/[\u4E00-\u9FFF]/],
+  };
+
+  const nonLatinBlocks: Array<[string, RegExp]> = [
+    ['Cyrillic', /[\u0400-\u04FF]/],
+    ['Greek', /[\u0370-\u03FF]/],
+    ['Georgian', /[\u10A0-\u10FF]/],
+    ['Armenian', /[\u0530-\u058F]/],
+    ['Arabic', /[\u0600-\u06FF]/],
+    ['Hebrew', /[\u0590-\u05FF]/],
+    ['Devanagari', /[\u0900-\u0963\u0966-\u097F]/],
+    ['Bengali', /[\u0980-\u09FF]/],
+    ['Gurmukhi', /[\u0A00-\u0A7F]/],
+    ['Gujarati', /[\u0A80-\u0AFF]/],
+    ['Tamil', /[\u0B80-\u0BFF]/],
+    ['Telugu', /[\u0C00-\u0C7F]/],
+    ['Kannada', /[\u0C80-\u0CFF]/],
+    ['Malayalam', /[\u0D00-\u0D7F]/],
+    ['Sinhala', /[\u0D80-\u0DFF]/],
+    ['Thai', /[\u0E00-\u0E7F]/],
+    ['Lao', /[\u0E80-\u0EFF]/],
+    ['Myanmar', /[\u1000-\u109F]/],
+    ['Khmer', /[\u1780-\u17FF]/],
+    ['Ethiopic', /[\u1200-\u137F]/],
+    ['Hiragana/Katakana', /[\u3040-\u30FF]/],
+    ['Hangul', /[\uAC00-\uD7AF]/],
+    ['CJK', /[\u4E00-\u9FFF]/],
+  ];
+
+  for (const langMeta of SUPPORTED_LANGUAGES) {
+    const dict = getDictionary(langMeta.code);
+    const allowed = expectedScripts[langMeta.code] || [];
+    for (const [k, val] of Object.entries(dict)) {
+      for (const [blockName, rx] of nonLatinBlocks) {
+        if (rx.test(val)) {
+          const isAllowed = allowed.some((a) => a.test(val));
+          assert.ok(
+            isAllowed,
+            `Foreign script (${blockName}) leaked into [${langMeta.code}] key "${k}": "${val}"`,
+          );
+        }
+      }
+    }
   }
 });
 

@@ -161,6 +161,14 @@ const LANGUAGE_MAP = new Map<string, LanguageMeta>(
   SUPPORTED_LANGUAGES.map((l) => [l.code, l]),
 );
 
+const LOWER_CODE_MAP = new Map<string, LanguageCode>(
+  SUPPORTED_LANGUAGES.map((l) => [l.code.toLowerCase(), l.code]),
+);
+
+const INTL_LOCALE_MAP = new Map<string, LanguageCode>(
+  SUPPORTED_LANGUAGES.map((l) => [l.intlLocale.toLowerCase(), l.code]),
+);
+
 export function isValidLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === 'string' && LANGUAGE_MAP.has(value);
 }
@@ -170,4 +178,59 @@ export function getLanguageMeta(code: string | undefined | null): LanguageMeta {
     return LANGUAGE_MAP.get(code)!;
   }
   return LANGUAGE_MAP.get('tr')!;
+}
+
+/**
+ * Resolves an array of browser/OS BCP-47 locale tags (e.g. navigator.languages)
+ * to the closest supported LanguageCode among the 73 languages.
+ * Falls back to 'en' when running on an unrecognized international OS locale so
+ * non-Turkish systems never experience Turkish language leakage on first launch.
+ */
+export function resolveSystemLanguage(
+  candidates?: readonly string[] | null,
+  fallback: LanguageCode = 'en',
+): LanguageCode {
+  if (!candidates || candidates.length === 0) {
+    return fallback;
+  }
+
+  for (const raw of candidates) {
+    if (typeof raw !== 'string') continue;
+    const norm = raw.trim().replace(/_/g, '-').toLowerCase();
+    if (!norm) continue;
+
+    const exactCode = LOWER_CODE_MAP.get(norm);
+    if (exactCode) return exactCode;
+
+    const exactIntl = INTL_LOCALE_MAP.get(norm);
+    if (exactIntl) return exactIntl;
+
+    if (norm.startsWith('zh-tw') || norm.startsWith('zh-hk') || norm.startsWith('zh-mo') || norm.includes('hant')) {
+      return 'zh-TW';
+    }
+    if (norm.startsWith('zh')) {
+      return 'zh-CN';
+    }
+    if (norm.startsWith('pt-br')) {
+      return 'pt-BR';
+    }
+    if (norm.startsWith('nb') || norm.startsWith('nn') || norm.startsWith('no')) {
+      return 'no';
+    }
+    if (norm.startsWith('fil') || norm.startsWith('tl')) {
+      return 'tl';
+    }
+    if (norm.startsWith('iw') || norm.startsWith('he')) {
+      return 'he';
+    }
+    if (norm.startsWith('in') || norm.startsWith('id')) {
+      return 'id';
+    }
+
+    const base = norm.split('-')[0];
+    const baseMatch = LOWER_CODE_MAP.get(base);
+    if (baseMatch) return baseMatch;
+  }
+
+  return fallback;
 }

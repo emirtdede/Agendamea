@@ -268,7 +268,7 @@ export function compileSeedToDictionary(seed: CompactLocaleSeed): UiDictionary {
     legalKvkkGdprTitle: legalGdpr,
     legalOpenSourceTitle: legalOpenSource,
     legalAccessibilityTitle: legalAccessibility,
-    legalLastUpdated: '2026 · Vellium (vellium.dev)',
+    legalLastUpdated: '© 2026 Vellium Teknoloji Anonim Şirketi (vellium.dev)',
 
     offlineBannerText: offlineBanner,
     undoButton: undo,
@@ -355,8 +355,11 @@ export function compileSeedToLegalDocuments(
           paragraphs: [dict.backupRestoreDesc],
         },
         {
-          heading: '3. Vellium (vellium.dev)',
-          paragraphs: [dict.settingsSubtitle],
+          heading: '3. Vellium Teknoloji Anonim Şirketi (vellium.dev)',
+          paragraphs: [
+            dict.settingsSubtitle,
+            'https://vellium.dev/en/legal/terms · https://vellium.dev/en/legal/company-information · legal@vellium.dev',
+          ],
         },
       ],
     },
@@ -375,7 +378,10 @@ export function compileSeedToLegalDocuments(
         },
         {
           heading: `3. ${dict.backupRestoreTitle} & ${dict.emptyTrashButton}`,
-          paragraphs: [dict.trashIntroDesc],
+          paragraphs: [
+            dict.trashIntroDesc,
+            'https://vellium.dev/en/legal/privacy · https://vellium.dev/en/legal/kvkk-notice · privacy@vellium.dev',
+          ],
         },
       ],
     },
@@ -385,8 +391,8 @@ export function compileSeedToLegalDocuments(
       subtitle: dict.legalLastUpdated,
       sections: [
         {
-          heading: '1. Agendamea - MIT License',
-          paragraphs: ['Copyright © 2026 Vellium (https://vellium.dev) · MIT License'],
+          heading: '1. Agendamea - MIT',
+          paragraphs: ['© 2026 Vellium Teknoloji Anonim Şirketi (https://vellium.dev) · MIT'],
         },
         {
           heading: `2. ${dict.legalOpenSourceTitle}`,
@@ -410,9 +416,9 @@ export function compileSeedToLegalDocuments(
           paragraphs: [dict.settingsSubtitle],
         },
         {
-          heading: '3. Vellium · Microsoft Store',
+          heading: '3. Vellium Teknoloji Anonim Şirketi · Microsoft Store',
           paragraphs: [
-            'https://vellium.dev · support@vellium.dev · https://github.com/emirtdede/Agendamea',
+            'https://vellium.dev · https://vellium.dev/en/legal/support · https://vellium.dev/en/legal/company-information · support@vellium.dev · contact@vellium.dev · security@vellium.dev',
           ],
         },
       ],

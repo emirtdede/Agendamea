@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import {
   getLanguageMeta,
   isValidLanguageCode,
+  resolveSystemLanguage,
   SUPPORTED_LANGUAGES,
   type LanguageCode,
   type LanguageMeta,
@@ -54,6 +55,20 @@ export function readInitialLanguage(): {
   } catch {
     // Ignore storage read failure
   }
+  if (typeof navigator !== 'undefined') {
+    const navList =
+      Array.isArray(navigator.languages) && navigator.languages.length > 0
+        ? navigator.languages
+        : typeof navigator.language === 'string' && navigator.language
+          ? [navigator.language]
+          : [];
+    if (navList.length > 0) {
+      return {
+        code: resolveSystemLanguage(navList, 'en'),
+        hasStoredPreference: false,
+      };
+    }
+  }
   return { code: 'tr', hasStoredPreference: false };
 }
 
@@ -71,13 +86,15 @@ export function I18nProvider({
   const legalDocs = useMemo(() => getLegalDocumentsForLanguage(lang, dict), [lang, dict]);
 
   useEffect(() => {
+    const nextTitle = `Agendamea - ${dict.appTitleSuffix}`;
     if (typeof document !== 'undefined') {
       document.documentElement.lang = meta.code;
       document.documentElement.dir = meta.dir;
-      document.title = `Agendamea - ${dict.appTitleSuffix}`;
+      document.title = nextTitle;
     }
     try {
       localStorage.setItem('agendamea-language', meta.code);
+      localStorage.setItem('agendamea-app-title', nextTitle);
     } catch {
       // Ignore storage errors
     }

@@ -26,7 +26,7 @@ import { BrandMark } from './BrandMark';
 import { CategoryColorPicker } from './CategoryColorPicker';
 import { ColorDot } from './ColorDot';
 
-const GITHUB_URL = 'https://github.com/emirtdede/Agendamea';
+const GITHUB_URL = 'https://github.com/emirtdede/agendamea';
 const SPONSOR_URL = 'https://github.com/sponsors/emirtdede';
 
 function GithubMark({ className }: { className?: string }) {
@@ -833,19 +833,21 @@ export const Sidebar = React.memo(function Sidebar({
             >
               <GithubMark className="h-4 w-4" />
             </a>
-            <a
-              href={SPONSOR_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={t.sponsor}
-              title={t.sponsor}
-              className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
-            >
-              <Heart className="h-4 w-4" />
-            </a>
+            {!window.agendameaWindow?.isWindowsStore && (
+              <a
+                href={SPONSOR_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t.sponsor}
+                title={t.sponsor}
+                className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                <Heart className="h-4 w-4" />
+              </a>
+            )}
           </>
         ) : (
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className={window.agendameaWindow?.isWindowsStore ? 'grid grid-cols-1 gap-1.5' : 'grid grid-cols-2 gap-1.5'}>
             <a
               href={GITHUB_URL}
               target="_blank"
@@ -856,16 +858,18 @@ export const Sidebar = React.memo(function Sidebar({
               <GithubMark className="h-3.5 w-3.5 shrink-0" />
               <span>GitHub</span>
             </a>
-            <a
-              href={SPONSOR_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={onCloseMobile}
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)]/60 px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
-            >
-              <Heart className="h-3.5 w-3.5 shrink-0" />
-              <span>{t.sponsor}</span>
-            </a>
+            {!window.agendameaWindow?.isWindowsStore && (
+              <a
+                href={SPONSOR_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onCloseMobile}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)]/60 px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
+              >
+                <Heart className="h-3.5 w-3.5 shrink-0" />
+                <span>{t.sponsor}</span>
+              </a>
+            )}
           </div>
         )}
       </div>

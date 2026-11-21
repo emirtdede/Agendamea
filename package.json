@@ -12,11 +12,11 @@
   "homepage": "https://vellium.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/emirtdede/Agendamea.git"
+    "url": "https://github.com/emirtdede/agendamea.git"
   },
   "bugs": {
     "email": "support@vellium.dev",
-    "url": "https://github.com/emirtdede/Agendamea/issues"
+    "url": "https://github.com/emirtdede/agendamea/issues"
   },
   "type": "module",
   "scripts": {

@@ -210,7 +210,23 @@ export default function App() {
       );
 
       if (!langDirtyRef.current && data.settings.language && isValidLanguageCode(data.settings.language)) {
-        setLanguage(data.settings.language);
+        let hasCustomLang = false;
+        try {
+          hasCustomLang = localStorage.getItem('agendamea-language-customized') === 'true';
+        } catch {
+          // Ignore storage read errors
+        }
+        if (!hasCustomLang && data.settings.language === 'tr' && initialLang.code !== 'tr') {
+          setLanguage(initialLang.code);
+          try {
+            localStorage.setItem('agendamea-language-customized', 'true');
+          } catch {
+            // Ignore storage write errors
+          }
+          void api.updateSettings({ language: initialLang.code }).catch(() => {});
+        } else {
+          setLanguage(data.settings.language);
+        }
       }
 
       if (!sidebarDirtyRef.current) {
@@ -296,9 +312,9 @@ export default function App() {
     [showInfoToast],
   );
 
-  // Automatic background update check on startup & every 6 hours when enabled
+  // Automatic background update check on startup & every 6 hours when enabled (skipped inside Microsoft Store MSIX sandbox)
   useEffect(() => {
-    if (!autoUpdateCheck) return;
+    if (!autoUpdateCheck || window.agendameaWindow?.isWindowsStore) return;
     const startupTimer = window.setTimeout(() => {
       void runUpdateCheck(false);
     }, 3000);
@@ -482,6 +498,11 @@ export default function App() {
     (nextLang: LanguageCode) => {
       langDirtyRef.current = true;
       setLanguage(nextLang);
+      try {
+        localStorage.setItem('agendamea-language-customized', 'true');
+      } catch {
+        // Ignore storage write errors
+      }
       void api.updateSettings({ language: nextLang }).catch((err) => {
         showInfoToast(formatUiError(err), 'error');
       });

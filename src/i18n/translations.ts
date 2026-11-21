@@ -349,7 +349,7 @@ export const TR_DICTIONARY: UiDictionary = {
   legalKvkkGdprTitle: 'KVKK ve GDPR Veri Koruma Aydınlatma Metni',
   legalOpenSourceTitle: 'Açık Kaynak ve Üçüncü Taraf Lisansları',
   legalAccessibilityTitle: 'Erişilebilirlik ve Destek Beyanı',
-  legalLastUpdated: 'Son Güncelleme: Kasım 2026 · Yayıncı: Vellium (vellium.dev)',
+  legalLastUpdated: '© 2026 Vellium Teknoloji Anonim Şirketi (vellium.dev)',
 
   offlineBannerText: 'Çevrimdışı çalışıyor - verileriniz cihazınızda güvende',
   undoButton: 'Geri Al',
@@ -538,7 +538,7 @@ export const EN_DICTIONARY: UiDictionary = {
   legalKvkkGdprTitle: 'GDPR & Data Protection Notice',
   legalOpenSourceTitle: 'Open Source & Third-Party Notices',
   legalAccessibilityTitle: 'Accessibility & Support Statement',
-  legalLastUpdated: 'Last Updated: November 2026 · Publisher: Vellium (vellium.dev)',
+  legalLastUpdated: '© 2026 Vellium Teknoloji Anonim Şirketi (vellium.dev)',
 
   offlineBannerText: 'Working offline - your data is safely stored on your device',
   undoButton: 'Undo',
@@ -688,7 +688,8 @@ export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '3. Güncelleme Kontrolü ve Veri Taşınabilirliği',
         paragraphs: [
-          'Güncelleme kontrolü yalnızca en son sürüm numarasını doğrulamak amacıyla GitHub Releases (api.github.com/repos/emirtdede/Agendamea/releases/latest) adresine kişisel veri içermeyen standart bir HTTPS sorgusu gönderir. Verilerinizi dilediğiniz an yedek dosyası olarak indirebilir veya kaldırıcı üzerinden kalıcı olarak silebilirsiniz.',
+          'Güncelleme kontrolü yalnızca en son sürüm numarasını doğrulamak amacıyla GitHub Releases (api.github.com/repos/emirtdede/agendamea/releases/latest) adresine kişisel veri içermeyen standart bir HTTPS sorgusu gönderir. Verilerinizi dilediğiniz an yedek dosyası olarak indirebilir veya kaldırıcı üzerinden kalıcı olarak silebilirsiniz.',
+          'Resmi Gizlilik Politikası: https://vellium.dev/tr/yasal/gizlilik-politikasi · Veri ve Gizlilik İletişim: privacy@vellium.dev',
         ],
       },
     ],
@@ -701,7 +702,7 @@ export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '1. Lisans Kapsamı ve Kullanım Hakkı',
         paragraphs: [
-          'Agendamea, Vellium tarafından MIT Açık Kaynak Lisansı ve Microsoft Store Standart Uygulama Lisans Koşulları çerçevesinde sunulmaktadır. Uygulamayı kişisel ve ticari görev yönetimi amacıyla cihazlarınızda ücretsiz olarak kurabilir ve kullanabilirsiniz.',
+          'Agendamea, Vellium Teknoloji Anonim Şirketi tarafından MIT Açık Kaynak Lisansı ve Microsoft Store Standart Uygulama Lisans Koşulları çerçevesinde sunulmaktadır. Uygulamayı kişisel ve ticari görev yönetimi amacıyla cihazlarınızda ücretsiz olarak kurabilir ve kullanabilirsiniz.',
         ],
       },
       {
@@ -713,7 +714,8 @@ export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '3. Garanti Reddi ve Fikri Mülkiyet',
         paragraphs: [
-          'Yazılım, yürürlükteki yasaların izin verdiği azami ölçüde herhangi bir garanti olmaksızın "olduğu gibi" (AS-IS) sunulmaktadır. Agendamea adı, amblemi ve Vellium markası Vellium (vellium.dev) bünyesine aittir.',
+          'Yazılım, yürürlükteki yasaların izin verdiği azami ölçüde herhangi bir garanti olmaksızın "olduğu gibi" (AS-IS) sunulmaktadır. Agendamea adı, amblemi ve Vellium markası Vellium Teknoloji Anonim Şirketi (vellium.dev) bünyesine aittir.',
+          'Hizmet Koşulları: https://vellium.dev/tr/yasal/hizmet-kosullari · Şirket Bilgileri: https://vellium.dev/tr/yasal/sirket-bilgileri · Hukuki İletişim: legal@vellium.dev',
         ],
       },
     ],
@@ -726,7 +728,7 @@ export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '1. Veri Sorumlusu ve İşleme Amacı',
         paragraphs: [
-          '6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve Avrupa Birliği Genel Veri Koruma Tüzüğü (GDPR) kapsamında Vellium, kullanıcı cihazında tutulan görev verilerine uzaktan erişmez ve merkezi bir veri tabanında kişisel veri toplamaz.',
+          '6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve Avrupa Birliği Genel Veri Koruma Tüzüğü (GDPR) kapsamında Vellium Teknoloji Anonim Şirketi, kullanıcı cihazında tutulan görev verilerine uzaktan erişmez ve merkezi bir veri tabanında kişisel veri toplamaz.',
         ],
       },
       {
@@ -739,6 +741,7 @@ export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
         heading: '3. İlgili Kişi Hakları (Erişim, Düzeltme, Silme ve Taşıma)',
         paragraphs: [
           'Tüm veriler cihazınızda olduğundan; verilerinize anında erişme, düzenleme, Çöp Kutusu üzerinden kalıcı olarak silme ve dışa aktarma haklarınızı doğrudan uygulama arayüzünden kullanabilirsiniz.',
+          'KVKK Aydınlatma Metni: https://vellium.dev/tr/yasal/kvkk-aydinlatma-metni · Başvuru: privacy@vellium.dev',
         ],
       },
     ],
@@ -751,13 +754,13 @@ export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '1. Agendamea Lisansı (MIT)',
         paragraphs: [
-          'Copyright © 2026 Vellium (https://vellium.dev). Bu yazılım MIT Lisansı altında lisanslanmıştır.',
+          '© 2026 Vellium Teknoloji Anonim Şirketi (https://vellium.dev). Bu yazılım MIT Lisansı altında lisanslanmıştır.',
         ],
       },
       {
         heading: '2. Üçüncü Taraf Açık Kaynak Bileşenleri',
         paragraphs: [
-          '• Electron (MIT License) · React & React DOM (MIT License) · Better-SQLite3 & SQLite (MIT / Public Domain) · Express (MIT License) · Tailwind CSS (MIT License) · Lucide React (ISC License) · Vite & Vite Plugin PWA (MIT License)',
+          '• Electron (MIT) · React & React DOM (MIT) · Better-SQLite3 & SQLite (MIT) · Express (MIT) · Tailwind CSS (MIT) · Lucide React (ISC) · Vite & Vite Plugin PWA (MIT)',
         ],
       },
     ],
@@ -782,7 +785,8 @@ export const TR_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '3. Microsoft Store Sertifikasyon ve Destek İletişimi',
         paragraphs: [
-          'Web Sitesi: https://vellium.dev · E-posta Destek: support@vellium.dev · GitHub: https://github.com/emirtdede/Agendamea',
+          'Web Sitesi: https://vellium.dev · Destek Politikası: https://vellium.dev/tr/yasal/destek-politikasi · Şirket Bilgileri: https://vellium.dev/tr/yasal/sirket-bilgileri · Güvenlik: https://vellium.dev/tr/yasal/guvenlik-acigi-bildirimi',
+          'E-posta: support@vellium.dev · contact@vellium.dev · privacy@vellium.dev · legal@vellium.dev · security@vellium.dev · billing@vellium.dev',
         ],
       },
     ],
@@ -798,7 +802,7 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '1. Local-First (Offline-First) Data Architecture',
         paragraphs: [
-          'Agendamea is built by Vellium (vellium.dev) with a strict local-first privacy architecture. All tasks, optional start and due dates, subtasks, notes, categories, and theme settings you create are stored exclusively on your own device (%APPDATA%\\Agendamea).',
+          'Agendamea is built by Vellium Teknoloji Anonim Şirketi (vellium.dev) with a strict local-first privacy architecture. All tasks, optional start and due dates, subtasks, notes, categories, and theme settings you create are stored exclusively on your own device (%APPDATA%\\Agendamea).',
           'None of your task data is ever transmitted to external cloud servers, sold to third parties, or used for advertising or profiling.',
         ],
       },
@@ -811,7 +815,8 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '3. Update Checks & Data Portability',
         paragraphs: [
-          'Update checks make a standard read-only HTTPS request to GitHub Releases (api.github.com/repos/emirtdede/Agendamea/releases/latest) without personal data. You can export, restore, or permanently delete all local data at any time.',
+          'Update checks make a standard read-only HTTPS request to GitHub Releases (api.github.com/repos/emirtdede/agendamea/releases/latest) without personal data. You can export, restore, or permanently delete all local data at any time.',
+          'Official Privacy Policy: https://vellium.dev/en/legal/privacy · Privacy Inquiries: privacy@vellium.dev',
         ],
       },
     ],
@@ -824,7 +829,7 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '1. License Grant & Permitted Use',
         paragraphs: [
-          'Agendamea is provided by Vellium under the MIT License and the Microsoft Store Standard Application License Terms for personal and commercial task management.',
+          'Agendamea is provided by Vellium Teknoloji Anonim Şirketi under the MIT License and the Microsoft Store Standard Application License Terms for personal and commercial task management.',
         ],
       },
       {
@@ -836,7 +841,8 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '3. Disclaimer of Warranties & Intellectual Property',
         paragraphs: [
-          'The software is provided "AS IS" without warranty of any kind. The Agendamea name, emblem, and Vellium brand identity are property of Vellium (vellium.dev).',
+          'The software is provided "AS IS" without warranty of any kind. The Agendamea name, emblem, and Vellium brand identity are property of Vellium Teknoloji Anonim Şirketi (vellium.dev).',
+          'Terms of Service: https://vellium.dev/en/legal/terms · Company Information: https://vellium.dev/en/legal/company-information · Legal Contact: legal@vellium.dev',
         ],
       },
     ],
@@ -849,7 +855,7 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '1. Data Controller & Local Processing',
         paragraphs: [
-          'Under GDPR, UK GDPR, and KVKK, Vellium does not collect, host, or remotely process personal user data on central servers.',
+          'Under GDPR, UK GDPR, and KVKK, Vellium Teknoloji Anonim Şirketi does not collect, host, or remotely process personal user data on central servers.',
         ],
       },
       {
@@ -862,6 +868,7 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
         heading: '3. Exercise of Data Subject Rights',
         paragraphs: [
           'Because all data is stored directly on your device, you have immediate self-service control over access, rectification, permanent erasure, and data portability directly within the application.',
+          'KVKK & Data Protection Notice: https://vellium.dev/en/legal/kvkk-notice · Data Requests: privacy@vellium.dev',
         ],
       },
     ],
@@ -874,13 +881,13 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '1. Agendamea License (MIT)',
         paragraphs: [
-          'Copyright © 2026 Vellium (https://vellium.dev). Released under the MIT License.',
+          '© 2026 Vellium Teknoloji Anonim Şirketi (https://vellium.dev). Released under the MIT License.',
         ],
       },
       {
         heading: '2. Third-Party Open Source Attributions',
         paragraphs: [
-          '• Electron (MIT License) · React & React DOM (MIT License) · Better-SQLite3 & SQLite (MIT / Public Domain) · Express (MIT License) · Tailwind CSS (MIT License) · Lucide React (ISC License) · Vite & Vite Plugin PWA (MIT License)',
+          '• Electron (MIT) · React & React DOM (MIT) · Better-SQLite3 & SQLite (MIT) · Express (MIT) · Tailwind CSS (MIT) · Lucide React (ISC) · Vite & Vite Plugin PWA (MIT)',
         ],
       },
     ],
@@ -905,7 +912,8 @@ export const EN_LEGAL_DOCUMENTS: Record<LegalDocId, LegalDocumentContent> = {
       {
         heading: '3. Microsoft Store Compliance & Publisher Support',
         paragraphs: [
-          'Website: https://vellium.dev · Support Email: support@vellium.dev · GitHub: https://github.com/emirtdede/Agendamea',
+          'Website: https://vellium.dev · Support Policy: https://vellium.dev/en/legal/support · Company Information: https://vellium.dev/en/legal/company-information · Security Disclosure: https://vellium.dev/en/legal/security-disclosure',
+          'Official Emails: support@vellium.dev · contact@vellium.dev · privacy@vellium.dev · legal@vellium.dev · security@vellium.dev · billing@vellium.dev',
         ],
       },
     ],

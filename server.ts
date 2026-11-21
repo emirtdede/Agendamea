@@ -8,8 +8,8 @@ import { TodoDatabase, ValidationError } from './src/db/database.ts';
 import { compareSemver, getLocalDateString } from './src/utils/todoLogic.ts';
 
 const APP_VERSION = '1.0.0';
-const GITHUB_RELEASES_API = 'https://api.github.com/repos/emirtdede/Agendamea/releases/latest';
-const GITHUB_RELEASES_HTML = 'https://github.com/emirtdede/Agendamea/releases/latest';
+const GITHUB_RELEASES_API = 'https://api.github.com/repos/emirtdede/agendamea/releases/latest';
+const GITHUB_RELEASES_HTML = 'https://github.com/emirtdede/agendamea/releases/latest';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -570,17 +570,20 @@ async function startServer() {
   });
 
   // JSON Backup Export
-  app.get('/api/export', (_req, res) => {
+  app.get('/api/export', (req, res) => {
     try {
+      const snapshot = db.getBootstrap();
       const payload = {
         exportedAt: new Date().toISOString(),
         app: 'Agendamea',
-        ...db.getBootstrap(),
+        ...snapshot,
       };
+      const reqLang = typeof req.query.lang === 'string' ? req.query.lang : snapshot.settings.language;
+      const fileSlug = reqLang === 'tr' ? 'yedek' : 'backup';
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="agendamea-yedek-${getLocalDateString()}.json"`,
+        `attachment; filename="agendamea-${fileSlug}-${getLocalDateString()}.json"`,
       );
       res.send(JSON.stringify(payload, null, 2));
     } catch (err) {

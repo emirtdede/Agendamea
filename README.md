@@ -179,8 +179,8 @@ flowchart LR
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/emirtdede/Agendamea.git
-   cd Agendamea
+   git clone https://github.com/emirtdede/agendamea.git
+   cd agendamea
    ```
 
 2. **Install Dependencies:**
@@ -357,8 +357,8 @@ flowchart LR
 
 1. **Depoyu Klonlayın:**
    ```bash
-   git clone https://github.com/emirtdede/Agendamea.git
-   cd Agendamea
+   git clone https://github.com/emirtdede/agendamea.git
+   cd agendamea
    ```
 
 2. **Bağımlılıkları Yükleyin:**
